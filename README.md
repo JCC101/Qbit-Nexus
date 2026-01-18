@@ -2,7 +2,7 @@
 
 **Centralized Distribution Node for qBittorrent Clusters.**
 
-Qbit-Nexus 是一个专为 PT 玩家和多服务器用户设计的高性能分发中枢。它允许您通过单一的 Web 界面，将种子文件或磁力链接同时推送到多个 qBittorrent 实例中，实现“一次上传，全网分发”。
+Qbit-Nexus 是一个专为 PT 玩家和多服务器用户设计的高性能分发中枢。它允许您通过单一的 Web 界面，将种子文件或磁力链接同时推送到多个 qBittorrent 实例中，实现一键推送任务。
 
 ## ✨ 核心特性 (Features)
 

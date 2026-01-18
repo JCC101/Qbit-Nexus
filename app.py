@@ -1,7 +1,8 @@
 import json
 import os
 import threading
-from flask import Flask, request, jsonify, render_template_string
+from functools import wraps
+from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 import qbittorrentapi
 
 # --- 配置存储路径 ---
@@ -11,8 +12,69 @@ if not os.path.exists(DATA_DIR):
 CONFIG_FILE = os.path.join(DATA_DIR, 'nexus_config.json')
 
 app = Flask(__name__)
+# 设置 Session 密钥 (用于加密 Cookie，每次重启随机生成即可保证安全性)
+app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
+# 获取环境变量中的密码
+WEB_PASSWORD = os.getenv('WEB_PASSWORD')
 
-# --- 嵌入式 HTML 模板 (v4.0 - 自适应布局/移动端适配) ---
+# --- 登录验证装饰器 ---
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # 如果设置了密码且用户未登录
+        if WEB_PASSWORD and not session.get('logged_in'):
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# --- 登录页面模板 ---
+LOGIN_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qbit-Nexus | Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="h-screen flex items-center justify-center bg-[#f8fafc]">
+    <div class="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-slate-100 mx-4">
+        <div class="text-center mb-8">
+            <div class="w-14 h-14 bg-gradient-to-tr from-[#0ea5e9] to-[#3b82f6] rounded-xl flex items-center justify-center text-white text-2xl mx-auto mb-4 shadow-lg shadow-blue-500/30">
+                <i class="fas fa-shield-alt"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-800">安全验证</h1>
+            <p class="text-slate-400 text-sm mt-2">Qbit-Nexus Control Center</p>
+        </div>
+        
+        <form method="POST" class="space-y-6">
+            <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase mb-2 tracking-wider">Access Password</label>
+                <input type="password" name="password" required autofocus
+                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-700 outline-none focus:border-[#0ea5e9] focus:ring-4 focus:ring-blue-500/10 transition-all placeholder-slate-300"
+                    placeholder="请输入访问密码...">
+            </div>
+            
+            {% if error %}
+            <div class="text-red-500 text-xs font-medium text-center bg-red-50 py-2.5 rounded-lg border border-red-100 flex items-center justify-center gap-2">
+                <i class="fas fa-exclamation-circle"></i> {{ error }}
+            </div>
+            {% endif %}
+
+            <button type="submit" 
+                class="w-full bg-gradient-to-r from-[#0ea5e9] to-[#3b82f6] text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200">
+                解锁控制台
+            </button>
+        </form>
+    </div>
+</body>
+</html>
+"""
+
+# --- 主界面模板 (增加退出按钮) ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -33,54 +95,22 @@ HTML_TEMPLATE = """
                         text: '#334155', muted: '#94a3b8'
                     },
                     fontFamily: { sans: ['Inter', 'sans-serif'] },
-                    screens: {
-                        '2xl': '1600px', // 优化 2K 显示
-                        '3xl': '2000px'  // 优化 4K 显示
-                    }
+                    screens: { '2xl': '1600px', '3xl': '2000px' }
                 }
             }
         }
     </script>
     <style>
         body { background-color: #f8fafc; color: #334155; font-family: 'Inter', sans-serif; }
-        
-        /* 响应式卡片 */
-        .fresh-card { 
-            background-color: #ffffff; 
-            border: 1px solid #e2e8f0; 
-            border-radius: 1rem; 
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
-            display: flex; flex-direction: column;
-        }
-
-        /* 响应式输入框 */
-        .fresh-input { 
-            background-color: #f1f5f9; border: 1px solid #e2e8f0; color: #334155; 
-            transition: all 0.2s; border-radius: 0.5rem; width: 100%;
-        }
+        .fresh-card { background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02); display: flex; flex-direction: column; }
+        .fresh-input { background-color: #f1f5f9; border: 1px solid #e2e8f0; color: #334155; transition: all 0.2s; border-radius: 0.5rem; width: 100%; }
         .fresh-input:focus { background-color: #ffffff; border-color: #0ea5e9; outline: none; box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1); }
         
-        /* 字体自适应 */
-        .txt-responsive { font-size: 0.875rem; } /* Mobile */
-        @media (min-width: 1600px) { .txt-responsive { font-size: 1rem; } } /* 2K */
-        
-        .lbl-responsive { font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 0.25rem; }
-        @media (min-width: 1600px) { .lbl-responsive { font-size: 0.875rem; margin-bottom: 0.5rem; } }
-
-        .section-title { 
-            font-size: 0.85rem; font-weight: 700; color: #0ea5e9; 
-            text-transform: uppercase; margin-bottom: 1rem; 
-            display: flex; align-items: center; gap: 0.5rem; 
-        }
-        @media (min-width: 1600px) { .section-title { font-size: 1rem; margin-bottom: 1.5rem; } }
-
-        /* 复选框组 */
+        .txt-responsive { font-size: 0.875rem; } @media (min-width: 1600px) { .txt-responsive { font-size: 1rem; } }
+        .lbl-responsive { font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 0.25rem; } @media (min-width: 1600px) { .lbl-responsive { font-size: 0.875rem; margin-bottom: 0.5rem; } }
+        .section-title { font-size: 0.85rem; font-weight: 700; color: #0ea5e9; text-transform: uppercase; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; } @media (min-width: 1600px) { .section-title { font-size: 1rem; margin-bottom: 1.5rem; } }
         .check-item { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none; color: #475569; }
-        .check-item input { accent-color: #0ea5e9; width: 1rem; height: 1rem; border-radius: 4px; }
-        @media (min-width: 1600px) { 
-            .check-item { font-size: 1rem; gap: 0.75rem; } 
-            .check-item input { width: 1.25rem; height: 1.25rem; }
-        }
+        .check-item input { accent-color: #0ea5e9; width: 1rem; height: 1rem; border-radius: 4px; } @media (min-width: 1600px) { .check-item { font-size: 1rem; gap: 0.75rem; } .check-item input { width: 1.25rem; height: 1.25rem; } }
 
         .fresh-btn { background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%); color: white; border-radius: 0.5rem; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2); }
         .fresh-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 10px -1px rgba(59, 130, 246, 0.3); }
@@ -89,10 +119,7 @@ HTML_TEMPLATE = """
         .status-online { background-color: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
         .status-offline { background-color: #ef4444; }
         .status-pending { background-color: #cbd5e1; }
-        
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
     </style>
 </head>
 <body class="h-screen flex flex-col md:flex-row overflow-hidden bg-bg text-text">
@@ -103,11 +130,8 @@ HTML_TEMPLATE = """
             <div class="w-8 h-8 rounded bg-primary flex items-center justify-center text-white"><i class="fas fa-layer-group"></i></div>
             <h1 class="font-bold text-lg 2xl:text-2xl text-slate-800">Qbit-Nexus</h1>
         </div>
-        <button class="md:hidden text-slate-500" onclick="document.getElementById('mobileMenu').classList.toggle('hidden')">
-            <i class="fas fa-bars text-xl"></i>
-        </button>
+        <button class="md:hidden text-slate-500" onclick="document.getElementById('mobileMenu').classList.toggle('hidden')"><i class="fas fa-bars text-xl"></i></button>
     </div>
-    
     <div id="mobileMenu" class="hidden md:flex flex-1 flex-col overflow-hidden">
         <div class="flex-1 overflow-y-auto p-4 space-y-2" id="serverList"></div>
         <div class="p-4 border-t border-border bg-slate-50">
@@ -121,16 +145,19 @@ HTML_TEMPLATE = """
 <main class="flex-1 flex flex-col min-w-0 bg-bg overflow-hidden relative">
     <header class="h-16 2xl:h-20 flex justify-between items-center px-6 2xl:px-10 border-b border-border bg-surface/50 backdrop-blur shrink-0">
         <h2 class="font-bold text-slate-700 text-base 2xl:text-xl">批量任务添加 (Batch Add)</h2>
-        <button onclick="openSettings()" class="text-xs 2xl:text-sm font-medium text-slate-500 hover:text-primary flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 2xl:px-4 2xl:py-2 rounded shadow-sm">
-            <i class="fas fa-cog"></i> 全局限速与默认值
-        </button>
+        <div class="flex items-center gap-3">
+            <button onclick="openSettings()" class="text-xs 2xl:text-sm font-medium text-slate-500 hover:text-primary flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 2xl:px-4 2xl:py-2 rounded shadow-sm transition-all">
+                <i class="fas fa-cog"></i> 全局配置
+            </button>
+            <a href="/logout" class="text-xs 2xl:text-sm font-medium text-red-500 hover:text-red-600 hover:bg-red-50 flex items-center gap-2 bg-white border border-red-100 px-3 py-1.5 2xl:px-4 2xl:py-2 rounded shadow-sm transition-all" title="退出登录">
+                <i class="fas fa-sign-out-alt"></i>
+            </a>
+        </div>
     </header>
 
     <div class="flex-1 overflow-y-auto p-4 md:p-6 2xl:p-10">
         <div class="w-full max-w-[1920px] mx-auto space-y-6">
-            
             <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 h-auto xl:h-[350px] 2xl:h-[400px]">
-                
                 <div class="fresh-card p-5 2xl:p-8 space-y-4">
                     <div class="section-title"><i class="fas fa-file-import"></i> 资源选择</div>
                     <div class="flex flex-col justify-center h-full gap-4">
@@ -147,7 +174,6 @@ HTML_TEMPLATE = """
                         </div>
                     </div>
                 </div>
-
                 <div class="fresh-card p-5 2xl:p-8 flex flex-col">
                     <div class="section-title flex justify-between">
                         <span><i class="fas fa-server"></i> 目标节点 (请勾选)</span>
@@ -165,64 +191,31 @@ HTML_TEMPLATE = """
 
             <div class="fresh-card p-6 2xl:p-10">
                 <div class="section-title"><i class="fas fa-sliders-h"></i> 任务参数设置</div>
-                
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 2xl:gap-12">
-                    
                     <div class="lg:col-span-5 space-y-5 border-b lg:border-b-0 lg:border-r border-slate-100 pb-6 lg:pb-0 lg:pr-8">
                         <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="lbl-responsive">管理模式 (TMM)</label>
-                                <select id="autoTMM" class="fresh-input px-3 py-2 txt-responsive">
-                                    <option value="false">手动 (Manual)</option>
-                                    <option value="true">自动 (Automatic)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="lbl-responsive">内容布局</label>
-                                <select id="contentLayout" class="fresh-input px-3 py-2 txt-responsive">
-                                    <option value="Original">原始</option>
-                                    <option value="Subfolder">创建子目录</option>
-                                    <option value="NoSubFolder">不创建子目录</option>
-                                </select>
-                            </div>
+                            <div><label class="lbl-responsive">管理模式 (TMM)</label><select id="autoTMM" class="fresh-input px-3 py-2 txt-responsive"><option value="false">手动 (Manual)</option><option value="true">自动 (Automatic)</option></select></div>
+                            <div><label class="lbl-responsive">内容布局</label><select id="contentLayout" class="fresh-input px-3 py-2 txt-responsive"><option value="Original">原始</option><option value="Subfolder">创建子目录</option><option value="NoSubFolder">不创建子目录</option></select></div>
                         </div>
-
                         <div><label class="lbl-responsive">保存路径 (Save Path)</label><input type="text" id="savePath" class="fresh-input px-3 py-2 txt-responsive" placeholder="默认路径..."></div>
                         <div><label class="lbl-responsive">重命名 (可选)</label><input type="text" id="rename" class="fresh-input px-3 py-2 txt-responsive" placeholder="保持原名则留空"></div>
-
                         <div class="grid grid-cols-2 gap-4">
                             <div><label class="lbl-responsive">分类 (Category)</label><input type="text" id="category" class="fresh-input px-3 py-2 txt-responsive"></div>
                             <div><label class="lbl-responsive">标签 (Tags)</label><input type="text" id="tags" class="fresh-input px-3 py-2 txt-responsive"></div>
                         </div>
                     </div>
-
                     <div class="lg:col-span-4 space-y-5 border-b lg:border-b-0 lg:border-r border-slate-100 pb-6 lg:pb-0 lg:px-8">
                         <div class="space-y-4 bg-slate-50 p-4 rounded-lg border border-slate-100">
                             <label class="text-xs 2xl:text-sm font-bold text-slate-400 uppercase">速度限制 (勾选应用预设)</label>
-                            
                             <label class="flex items-center justify-between cursor-pointer group p-1 hover:bg-white rounded transition-colors">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 rounded bg-green-100 text-green-600 flex items-center justify-center text-sm"><i class="fas fa-upload"></i></div>
-                                    <span class="txt-responsive font-medium text-slate-700">启用上传限速</span>
-                                </div>
-                                <div class="flex items-center gap-3">
-                                    <span id="limitUlDisplay" class="text-xs text-slate-400">--</span>
-                                    <input type="checkbox" id="useLimitUl" class="accent-primary w-5 h-5 rounded">
-                                </div>
+                                <div class="flex items-center gap-3"><div class="w-8 h-8 rounded bg-green-100 text-green-600 flex items-center justify-center text-sm"><i class="fas fa-upload"></i></div><span class="txt-responsive font-medium text-slate-700">启用上传限速</span></div>
+                                <div class="flex items-center gap-3"><span id="limitUlDisplay" class="text-xs text-slate-400">--</span><input type="checkbox" id="useLimitUl" class="accent-primary w-5 h-5 rounded"></div>
                             </label>
-
                             <label class="flex items-center justify-between cursor-pointer group p-1 hover:bg-white rounded transition-colors">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 rounded bg-blue-100 text-blue-600 flex items-center justify-center text-sm"><i class="fas fa-download"></i></div>
-                                    <span class="txt-responsive font-medium text-slate-700">启用下载限速</span>
-                                </div>
-                                <div class="flex items-center gap-3">
-                                    <span id="limitDlDisplay" class="text-xs text-slate-400">--</span>
-                                    <input type="checkbox" id="useLimitDl" class="accent-primary w-5 h-5 rounded">
-                                </div>
+                                <div class="flex items-center gap-3"><div class="w-8 h-8 rounded bg-blue-100 text-blue-600 flex items-center justify-center text-sm"><i class="fas fa-download"></i></div><span class="txt-responsive font-medium text-slate-700">启用下载限速</span></div>
+                                <div class="flex items-center gap-3"><span id="limitDlDisplay" class="text-xs text-slate-400">--</span><input type="checkbox" id="useLimitDl" class="accent-primary w-5 h-5 rounded"></div>
                             </label>
                         </div>
-
                         <div class="space-y-3 pt-2">
                             <label class="text-xs 2xl:text-sm font-bold text-slate-400 uppercase">停止条件 (留空为无)</label>
                             <div class="grid grid-cols-2 gap-4">
@@ -231,7 +224,6 @@ HTML_TEMPLATE = """
                             </div>
                         </div>
                     </div>
-
                     <div class="lg:col-span-3 space-y-4 lg:pl-4 pt-2">
                         <label class="text-xs 2xl:text-sm font-bold text-slate-400 uppercase mb-3 block">高级选项</label>
                         <div class="flex flex-col gap-4">
@@ -243,14 +235,12 @@ HTML_TEMPLATE = """
                         </div>
                     </div>
                 </div>
-
                 <div class="mt-8 pt-6 border-t border-slate-100">
                     <button onclick="distributeTorrent()" class="fresh-btn w-full py-3.5 2xl:py-5 font-bold text-base 2xl:text-xl tracking-wide flex justify-center items-center gap-2 shadow-lg shadow-blue-500/20">
                         <i class="fas fa-paper-plane"></i> 立即批量添加
                     </button>
                 </div>
             </div>
-
             <div class="bg-white border border-slate-200 rounded-lg p-2 flex flex-col h-32 2xl:h-48 shadow-sm">
                 <div class="px-3 py-2 flex justify-between items-center border-b border-slate-50">
                     <span class="text-[10px] 2xl:text-xs font-bold text-slate-400 uppercase tracking-widest">System Log</span>
@@ -283,7 +273,6 @@ HTML_TEMPLATE = """
 <div id="settingsModal" class="fixed inset-0 bg-slate-900/40 z-50 hidden flex items-center justify-center backdrop-blur-sm p-4">
     <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl p-6 space-y-6">
         <h3 class="font-bold text-lg text-slate-800 border-b border-slate-100 pb-3">全局配置 & 预设</h3>
-        
         <div class="bg-blue-50/50 p-5 rounded-xl border border-blue-100">
             <label class="text-xs font-bold text-primary uppercase mb-3 block">限速预设值 (Presets)</label>
             <div class="grid grid-cols-2 gap-4">
@@ -291,7 +280,6 @@ HTML_TEMPLATE = """
                 <div><label class="lbl-responsive">下载限速 (KiB/s)</label><input type="number" id="def_presetDl" class="fresh-input px-3 py-2 bg-white" placeholder="例如 51200"></div>
             </div>
         </div>
-        
         <div class="space-y-4">
             <label class="text-xs font-bold text-slate-400 uppercase block">表单默认值</label>
             <div><label class="lbl-responsive">默认保存路径</label><input type="text" id="def_savePath" class="fresh-input px-3 py-2"></div>
@@ -300,7 +288,6 @@ HTML_TEMPLATE = """
                 <div><label class="lbl-responsive">默认标签</label><input type="text" id="def_tags" class="fresh-input px-3 py-2"></div>
             </div>
         </div>
-
         <div class="flex justify-end gap-3 pt-3">
             <button onclick="toggleModal('settingsModal')" class="px-5 py-2 text-sm text-slate-500 hover:text-slate-800">取消</button>
             <button onclick="saveSettings()" class="px-6 py-2 text-sm bg-primary text-white rounded hover:bg-blue-600 shadow-md">保存配置</button>
@@ -310,14 +297,8 @@ HTML_TEMPLATE = """
 
 <script>
     let globalConfig = {};
-
     function toggleModal(id) { document.getElementById(id).classList.toggle('hidden'); }
-    
-    function toggleAllTargets(checked) {
-        const cbs = document.querySelectorAll('input[name="targetNode"]');
-        cbs.forEach(cb => cb.checked = checked);
-    }
-
+    function toggleAllTargets(checked) { document.querySelectorAll('input[name="targetNode"]').forEach(cb => cb.checked = checked); }
     function openSettings() {
         const d = globalConfig.defaults || {};
         document.getElementById('def_presetUl').value = d.presetUl || '';
@@ -327,14 +308,7 @@ HTML_TEMPLATE = """
         document.getElementById('def_tags').value = d.tags || '';
         toggleModal('settingsModal');
     }
-
-    // --- 脱敏辅助函数 ---
-    function maskUrl(urlStr) {
-        try {
-            return urlStr.replace(/(\d{1,3}\.)\d{1,3}\.\d{1,3}(\.\d{1,3})/, '$1***.***$2');
-        } catch(e) { return '******'; }
-    }
-
+    function maskUrl(urlStr) { try { return urlStr.replace(/(\d{1,3}\.)\d{1,3}\.\d{1,3}(\.\d{1,3})/, '$1***.***$2'); } catch(e) { return '******'; } }
     function log(msg, type='info') {
         const box = document.getElementById('consoleLog');
         const time = new Date().toLocaleTimeString('en-US', {hour12: false});
@@ -344,7 +318,6 @@ HTML_TEMPLATE = """
         box.innerHTML += `<div class="${color} flex items-center"><span class="opacity-40 text-[10px] mr-2 font-mono">${time}</span>${icon}<span>${msg}</span></div>`;
         box.scrollTop = box.scrollHeight;
     }
-
     function updateFileName(input) {
         const display = document.getElementById('fileNameDisplay');
         const zone = document.getElementById('fileDropZone');
@@ -354,70 +327,41 @@ HTML_TEMPLATE = """
             display.innerText = '点击上传 .torrent 文件'; display.className = "text-sm 2xl:text-base font-medium text-slate-500"; zone.classList.remove('border-primary', 'bg-blue-50');
         }
     }
-
     async function loadData() {
         const res = await fetch('/api/config');
+        if(res.status === 403 || res.redirected) window.location.href = '/login';
         const data = await res.json();
         globalConfig = data;
         const servers = data.servers || [];
         const defaults = data.defaults || {};
-
-        // Sidebar Nodes
         const container = document.getElementById('serverList');
         container.innerHTML = '';
         const targetContainer = document.getElementById('targetSelectionArea');
         targetContainer.innerHTML = '';
-        
         if(servers.length === 0) {
             container.innerHTML = '<div class="text-center py-6 text-xs text-muted">暂无节点</div>';
             targetContainer.innerHTML = '<div class="text-sm text-muted text-center py-10 w-full col-span-full">暂无可用节点，请在侧边栏添加</div>';
         }
-
         servers.forEach((s, idx) => {
-            const displayName = s.name || s.host; 
-            const safeHost = maskUrl(s.host); 
-
-            // Sidebar Item
+            const displayName = s.name || s.host; const safeHost = maskUrl(s.host); 
             const div = document.createElement('div');
             div.className = 'bg-white border border-slate-100 p-2.5 rounded-lg hover:border-primary/50 transition-all mb-2 flex justify-between items-center group cursor-default';
-            div.innerHTML = `
-                <div class="overflow-hidden pr-2">
-                    <div class="font-bold text-sm 2xl:text-base text-slate-700 truncate">${displayName}</div>
-                    <div class="text-[10px] 2xl:text-xs text-slate-400 truncate font-mono">${safeHost}</div>
-                </div>
-                <div class="flex gap-2 items-center">
-                    <div id="status-${idx}" class="status-dot status-pending" title="Checking..."></div>
-                    <button onclick="removeServer(${idx})" class="text-slate-300 hover:text-red-500 transition-colors px-1"><i class="fas fa-trash text-xs"></i></button>
-                </div>
-            `;
+            div.innerHTML = `<div class="overflow-hidden pr-2"><div class="font-bold text-sm 2xl:text-base text-slate-700 truncate">${displayName}</div><div class="text-[10px] 2xl:text-xs text-slate-400 truncate font-mono">${safeHost}</div></div><div class="flex gap-2 items-center"><div id="status-${idx}" class="status-dot status-pending" title="Checking..."></div><button onclick="removeServer(${idx})" class="text-slate-300 hover:text-red-500 transition-colors px-1"><i class="fas fa-trash text-xs"></i></button></div>`;
             container.appendChild(div);
-
-            // Target Checkbox (默认不勾选)
             const label = document.createElement('label');
             label.className = "flex items-center gap-2 p-3 border border-slate-100 rounded-lg hover:bg-blue-50 cursor-pointer bg-white transition-all hover:shadow-sm";
-            label.innerHTML = `
-                <input type="checkbox" name="targetNode" value="${idx}" class="accent-primary w-4 h-4 2xl:w-5 2xl:h-5">
-                <div class="overflow-hidden">
-                    <div class="text-sm 2xl:text-base font-bold text-slate-600 truncate">${displayName}</div>
-                    <div class="text-[10px] 2xl:text-xs text-slate-400 truncate font-mono">${safeHost}</div>
-                </div>
-            `;
+            label.innerHTML = `<input type="checkbox" name="targetNode" value="${idx}" class="accent-primary w-4 h-4 2xl:w-5 2xl:h-5"><div class="overflow-hidden"><div class="text-sm 2xl:text-base font-bold text-slate-600 truncate">${displayName}</div><div class="text-[10px] 2xl:text-xs text-slate-400 truncate font-mono">${safeHost}</div></div>`;
             targetContainer.appendChild(label);
             setTimeout(() => testServer(idx, true), idx * 200 + 300);
         });
-
-        // Fill Form Defaults
         if(!document.getElementById('savePath').value) document.getElementById('savePath').value = defaults.savePath || '';
         document.getElementById('category').value = defaults.category || '';
         document.getElementById('tags').value = defaults.tags || '';
-        
-        // Update Preset Display
         const ulText = defaults.presetUl ? `${defaults.presetUl} KiB/s` : '未配置';
         const dlText = defaults.presetDl ? `${defaults.presetDl} KiB/s` : '未配置';
         document.getElementById('limitUlDisplay').innerText = ulText;
         document.getElementById('limitDlDisplay').innerText = dlText;
     }
-
     async function addServer() {
         const name = document.getElementById('newNodeName').value.trim();
         const host = document.getElementById('newHost').value.trim();
@@ -428,9 +372,7 @@ HTML_TEMPLATE = """
         document.getElementById('newNodeName').value = ''; document.getElementById('newHost').value = ''; document.getElementById('newUser').value = ''; document.getElementById('newPass').value = '';
         toggleModal('addNodeModal'); loadData(); log(`节点已保存: ${name || host}`, 'success');
     }
-
     async function removeServer(idx) { if(!confirm("确认移除?")) return; await fetch(`/api/servers/${idx}`, { method: 'DELETE' }); loadData(); }
-
     async function testServer(idx, silent=false) {
         const indicator = document.getElementById(`status-${idx}`);
         try {
@@ -440,7 +382,6 @@ HTML_TEMPLATE = """
             if(!silent) log(data.success ? `节点 #${idx+1} 连接成功` : `连接失败: ${data.error}`, data.success?'success':'error');
         } catch(e) { if(indicator) indicator.className = "status-dot status-offline"; }
     }
-
     async function saveSettings() {
         const defaults = {
             presetUl: document.getElementById('def_presetUl').value, presetDl: document.getElementById('def_presetDl').value,
@@ -449,60 +390,40 @@ HTML_TEMPLATE = """
         await fetch('/api/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(defaults) });
         toggleModal('settingsModal'); log('全局配置已更新', 'success'); loadData();
     }
-
     async function distributeTorrent() {
         const fileInput = document.getElementById('torrentFile');
         const magnet = document.getElementById('magnetLink').value.trim();
         if (!fileInput.files[0] && !magnet) return alert("请上传种子或输入磁力链");
-
         const selectedNodes = Array.from(document.querySelectorAll('input[name="targetNode"]:checked')).map(cb => parseInt(cb.value));
         if(selectedNodes.length === 0) return alert("请至少勾选一个目标节点！");
-
         const formData = new FormData();
         if (fileInput.files[0]) formData.append('file', fileInput.files[0]);
         if (magnet) formData.append('magnet', magnet);
-
         formData.append('targets', JSON.stringify(selectedNodes));
-        
-        // Native Options
         formData.append('auto_tmm', document.getElementById('autoTMM').value);
         formData.append('content_layout', document.getElementById('contentLayout').value);
         formData.append('save_path', document.getElementById('savePath').value.trim());
         formData.append('rename', document.getElementById('rename').value.trim());
         formData.append('category', document.getElementById('category').value.trim());
         formData.append('tags', document.getElementById('tags').value.trim());
-        
-        // Limits & Stops
         formData.append('use_limit_ul', document.getElementById('useLimitUl').checked);
         formData.append('use_limit_dl', document.getElementById('useLimitDl').checked);
         formData.append('ratio_limit', document.getElementById('ratioLimit').value);
         formData.append('seeding_time_limit', document.getElementById('seedingTimeLimit').value);
-
-        // Booleans
         formData.append('start_torrent', document.getElementById('startTorrent').checked);
         formData.append('add_to_top', document.getElementById('addToTop').checked);
         formData.append('skip_hash', document.getElementById('skipHash').checked);
         formData.append('sequential', document.getElementById('sequential').checked);
         formData.append('first_last', document.getElementById('firstLast').checked);
-
         log(`>>> 正在向 ${selectedNodes.length} 个节点批量添加任务...`, 'info');
-
         try {
             const res = await fetch('/api/distribute', { method: 'POST', body: formData });
             const result = await res.json();
-            
-            if(result.debug_limits) {
-               if(result.debug_limits.up) log(`[配置] 上传限速: ${result.debug_limits.up} Bytes/s`);
-            }
-
-            result.results.forEach(r => {
-                const sName = r.name || r.server; 
-                log(r.success ? `[成功] -> ${sName}` : `[失败] -> ${sName}: ${r.error}`, r.success?'success':'error');
-            });
+            if(result.debug_limits) { if(result.debug_limits.up) log(`[配置] 上传限速: ${result.debug_limits.up} Bytes/s`); }
+            result.results.forEach(r => { const sName = r.name || r.server; log(r.success ? `[成功] -> ${sName}` : `[失败] -> ${sName}: ${r.error}`, r.success?'success':'error'); });
             if(result.results.every(r => r.success)) log(">>> 所有任务添加完成", 'success');
         } catch (e) { log("System Error: " + e.message, 'error'); }
     }
-
     loadData();
 </script>
 </body>
@@ -532,13 +453,38 @@ def get_client(server_conf):
         REQUESTS_ARGS={'timeout': 15}
     )
 
+# --- 路由 ---
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if not WEB_PASSWORD: # 没设置密码直接跳过
+        session['logged_in'] = True
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        if request.form.get('password') == WEB_PASSWORD:
+            session['logged_in'] = True
+            return redirect(request.args.get('next') or url_for('index'))
+        else:
+            return render_template_string(LOGIN_TEMPLATE, error="密码错误")
+    
+    return render_template_string(LOGIN_TEMPLATE)
+
+@app.route('/logout')
+def logout():
+    session.pop('logged_in', None)
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def index(): return render_template_string(HTML_TEMPLATE)
 
 @app.route('/api/config', methods=['GET'])
+@login_required
 def get_config(): return jsonify(load_data_file())
 
 @app.route('/api/settings', methods=['POST'])
+@login_required
 def save_settings():
     new_defaults = request.json
     data = load_data_file()
@@ -547,6 +493,7 @@ def save_settings():
     return jsonify({'success': True})
 
 @app.route('/api/servers', methods=['POST'])
+@login_required
 def add_server():
     req = request.json
     data = load_data_file()
@@ -560,6 +507,7 @@ def add_server():
     return jsonify({'success': True})
 
 @app.route('/api/servers/<int:idx>', methods=['DELETE'])
+@login_required
 def delete_server(idx):
     data = load_data_file()
     if 0 <= idx < len(data['servers']):
@@ -568,6 +516,7 @@ def delete_server(idx):
     return jsonify({'error': 'Invalid index'}), 400
 
 @app.route('/api/servers/<int:idx>/test', methods=['POST'])
+@login_required
 def test_server(idx):
     data = load_data_file()
     servers = data['servers']
@@ -579,6 +528,7 @@ def test_server(idx):
     except Exception as e: return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/distribute', methods=['POST'])
+@login_required
 def distribute():
     data = load_data_file()
     all_servers = data['servers']
@@ -596,7 +546,6 @@ def distribute():
     magnet = request.form.get('magnet')
     torrent_file = request.files.get('file')
     
-    # --- 参数解析与转换 ---
     def get_float(key):
         val = request.form.get(key)
         return float(val) if val and val.replace('.','',1).isdigit() else None
@@ -605,7 +554,6 @@ def distribute():
         val = request.form.get(key)
         return int(val) if val and val.isdigit() else None
     
-    # 从预设读取限速
     def get_preset_bytes(key):
         val = defaults.get(key)
         if val and str(val).isdigit(): return int(val) * 1024
@@ -613,7 +561,6 @@ def distribute():
 
     up_limit = get_preset_bytes('presetUl') if request.form.get('use_limit_ul') == 'true' else None
     dl_limit = get_preset_bytes('presetDl') if request.form.get('use_limit_dl') == 'true' else None
-    
     layout_val = request.form.get('content_layout', 'Original')
 
     options = {
@@ -621,18 +568,14 @@ def distribute():
         'rename': request.form.get('rename') or None,
         'category': request.form.get('category') or None,
         'tags': request.form.get('tags') or None,
-        
         'is_paused': request.form.get('start_torrent') == 'false', 
         'use_auto_torrent_management': request.form.get('auto_tmm') == 'true',
-        
         'content_layout': layout_val,
         'is_root_folder': (layout_val == 'Original'),
-        
         'upload_limit': up_limit,
         'download_limit': dl_limit,
         'ratio_limit': get_float('ratio_limit'),
         'seeding_time_limit': get_int('seeding_time_limit'),
-        
         'is_skip_checking': request.form.get('skip_hash') == 'true',
         'is_sequential_download': request.form.get('sequential') == 'true',
         'is_first_last_piece_priority': request.form.get('first_last') == 'true',
@@ -640,7 +583,6 @@ def distribute():
     }
     
     options = {k: v for k, v in options.items() if v is not None}
-
     file_data = torrent_file.read() if torrent_file else None
     results = []
 
@@ -660,10 +602,7 @@ def distribute():
     for t in threads: t.start()
     for t in threads: t.join()
 
-    return jsonify({
-        'results': results,
-        'debug_limits': {'up': up_limit, 'dl': dl_limit}
-    })
+    return jsonify({'results': results, 'debug_limits': {'up': up_limit, 'dl': dl_limit}})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

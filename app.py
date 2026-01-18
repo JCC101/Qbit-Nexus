@@ -12,426 +12,500 @@ CONFIG_FILE = os.path.join(DATA_DIR, 'nexus_config.json')
 
 app = Flask(__name__)
 
-# --- 嵌入式 HTML 模板 (现代专业版) ---
+# --- 嵌入式 HTML 模板 (清爽明亮版) ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Qbit-Nexus | Pro</title>
+    <title>Qbit-Nexus | Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        bg: '#121212',
-                        surface: '#1e1e1e',
-                        surface2: '#252526',
-                        primary: '#3b82f6',
-                        accent: '#06b6d4',
-                        text: '#e4e4e7',
-                        muted: '#a1a1aa',
-                        border: '#3f3f46'
+                        bg: '#f8fafc',       // 极浅蓝灰背景
+                        surface: '#ffffff',  // 纯白卡片
+                        border: '#e2e8f0',   // 柔和边框
+                        primary: '#0ea5e9',  // 天际蓝
+                        primary_hover: '#0284c7',
+                        text: '#334155',     // 深灰文本
+                        muted: '#94a3b8',    // 浅灰文本
+                        danger: '#ef4444'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif']
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+                        'glow': '0 0 15px rgba(14, 165, 233, 0.3)'
                     }
                 }
             }
         }
     </script>
     <style>
-        body { background-color: #121212; color: #e4e4e7; font-family: 'Inter', system-ui, sans-serif; }
-        /* 自定义滚动条 */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #1e1e1e; }
-        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+        body { background-color: #f8fafc; color: #334155; font-family: 'Inter', sans-serif; }
         
-        .input-dark { 
-            background-color: #27272a; 
-            border: 1px solid #3f3f46; 
-            color: white; 
-            transition: all 0.2s; 
+        /* 玻璃拟态/卡片风格 */
+        .fresh-card { 
+            background-color: #ffffff; 
+            border: 1px solid #e2e8f0; 
+            border-radius: 1rem; 
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+            transition: transform 0.2s, box-shadow 0.2s;
         }
-        .input-dark:focus { 
-            border-color: #3b82f6; 
+        
+        .fresh-input { 
+            background-color: #f1f5f9; 
+            border: 1px solid #e2e8f0; 
+            color: #334155; 
+            transition: all 0.2s;
+            border-radius: 0.5rem;
+        }
+        .fresh-input:focus { 
+            background-color: #ffffff;
+            border-color: #0ea5e9; 
             outline: none; 
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); 
-        }
-        .toggle-checkbox:checked {
-            right: 0;
-            border-color: #3b82f6;
-        }
-        .toggle-checkbox:checked + .toggle-label {
-            background-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1); 
         }
         
-        /* 拟态卡片 */
-        .glass-panel {
-            background: #1e1e1e;
-            border: 1px solid #333;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+        .fresh-btn {
+            background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%);
+            color: white;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2);
         }
+        .fresh-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 10px -1px rgba(59, 130, 246, 0.3);
+        }
+        .fresh-btn:active { transform: translateY(0); }
+
+        .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; }
+        .status-online { background-color: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
+        .status-offline { background-color: #ef4444; }
+        .status-pending { background-color: #cbd5e1; }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
-<body class="h-screen flex flex-col overflow-hidden">
+<body class="h-screen flex overflow-hidden selection:bg-primary selection:text-white">
 
-<header class="h-14 border-b border-border bg-surface flex items-center justify-between px-6 z-10 shrink-0">
-    <div class="flex items-center gap-3">
-        <i class="fas fa-network-wired text-primary text-xl"></i>
-        <h1 class="font-bold text-lg tracking-wide">Qbit-Nexus <span class="text-xs font-normal text-muted bg-surface2 px-2 py-0.5 rounded ml-2">Pro</span></h1>
+<aside class="w-72 bg-surface border-r border-border flex flex-col z-20 shadow-sm">
+    <div class="h-20 flex items-center px-6 border-b border-border">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-primary to-blue-600 flex items-center justify-center text-white shadow-glow">
+                <i class="fas fa-bolt text-sm"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg text-slate-800 tracking-tight">Qbit-Nexus</h1>
+                <p class="text-[10px] text-muted font-medium uppercase tracking-wider">Control Center</p>
+            </div>
+        </div>
     </div>
-    <div class="flex items-center gap-4">
-        <button onclick="openSettings()" class="text-muted hover:text-primary transition-colors flex items-center gap-2 text-sm bg-surface2 px-3 py-1.5 rounded border border-border">
-            <i class="fas fa-cog"></i> 全局默认设置
-        </button>
-        <div class="h-4 w-[1px] bg-border"></div>
-        <a href="https://github.com/agonie0v0/qbit-nexus" target="_blank" class="text-muted hover:text-white transition-colors">
-            <i class="fab fa-github text-xl"></i>
-        </a>
-    </div>
-</header>
-
-<main class="flex-1 flex overflow-hidden">
     
-    <aside class="w-80 border-r border-border bg-surface flex flex-col shrink-0">
-        <div class="p-4 border-b border-border flex justify-between items-center">
-            <span class="font-semibold text-sm text-muted uppercase tracking-wider">节点列表</span>
-            <button onclick="toggleAddNodePanel()" class="text-primary hover:text-accent text-sm"><i class="fas fa-plus"></i> 添加</button>
-        </div>
-        
-        <div id="addNodePanel" class="hidden p-4 bg-surface2 border-b border-border space-y-3">
-            <input type="text" id="newHost" placeholder="地址 (http://IP:Port)" class="w-full input-dark rounded px-3 py-2 text-sm">
-            <div class="flex gap-2">
-                <input type="text" id="newUser" placeholder="用户名" class="w-1/2 input-dark rounded px-3 py-2 text-sm">
-                <input type="password" id="newPass" placeholder="密码" class="w-1/2 input-dark rounded px-3 py-2 text-sm">
-            </div>
-            <button onclick="addServer()" class="w-full bg-primary hover:bg-blue-600 text-white font-medium py-1.5 rounded text-sm transition-colors">确认添加</button>
+    <div class="flex-1 overflow-y-auto p-4 space-y-3" id="serverList">
         </div>
 
-        <div id="serverList" class="flex-1 overflow-y-auto p-2 space-y-2">
-            </div>
-    </aside>
+    <div class="p-4 border-t border-border bg-slate-50">
+        <button onclick="toggleModal('addNodeModal')" class="w-full py-2.5 rounded-lg border border-dashed border-slate-300 text-slate-500 text-sm font-medium hover:border-primary hover:text-primary hover:bg-white transition-all">
+            <i class="fas fa-plus-circle mr-2"></i> 添加下载器
+        </button>
+    </div>
+</aside>
 
-    <section class="flex-1 flex flex-col bg-bg overflow-y-auto">
-        <div class="max-w-5xl w-full mx-auto p-6 space-y-6">
+<main class="flex-1 flex flex-col min-w-0 bg-bg relative">
+    <header class="h-20 flex justify-between items-center px-8 sticky top-0 z-10">
+        <div>
+            <h2 class="font-bold text-xl text-slate-800">任务分发</h2>
+            <p class="text-xs text-muted mt-0.5">配置您的分发任务参数</p>
+        </div>
+        <button onclick="openSettings()" class="group flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-border text-sm text-slate-600 hover:border-primary hover:text-primary transition-all shadow-sm">
+            <i class="fas fa-sliders-h transition-transform group-hover:rotate-180"></i> 全局限速与默认值
+        </button>
+    </header>
+
+    <div class="flex-1 overflow-y-auto p-8 pt-0">
+        <div class="max-w-5xl mx-auto space-y-6">
             
-            <div class="glass-panel rounded-lg p-5">
-                <h2 class="text-lg font-medium mb-4 flex items-center gap-2 text-primary">
-                    <i class="fas fa-file-import"></i> 任务来源
-                </h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="space-y-2">
-                        <label class="text-xs font-semibold text-muted uppercase">上传 Torrent 文件</label>
-                        <div class="relative group">
+            <div class="fresh-card p-6 bg-white">
+                <h3 class="text-xs font-bold text-muted uppercase mb-4 flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-primary"></span> 资源选择
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+                    <div class="md:col-span-5">
+                        <div class="relative group h-full">
                             <input type="file" id="torrentFile" accept=".torrent" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onchange="updateFileName(this)">
-                            <div class="input-dark rounded border border-dashed border-gray-600 p-8 text-center group-hover:border-primary transition-colors flex flex-col items-center justify-center gap-2">
-                                <i class="fas fa-cloud-upload-alt text-2xl text-muted"></i>
-                                <span id="fileNameDisplay" class="text-sm text-gray-400">拖拽文件或点击选择</span>
+                            <div id="fileDropZone" class="h-32 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 group-hover:border-primary group-hover:bg-blue-50 transition-all">
+                                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-muted group-hover:bg-blue-100 group-hover:text-primary transition-colors">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                </div>
+                                <span id="fileNameDisplay" class="text-xs font-medium text-slate-500">点击上传 .torrent 文件</span>
                             </div>
                         </div>
                     </div>
-                    <div class="space-y-2">
-                        <label class="text-xs font-semibold text-muted uppercase">或 粘贴 Magnet 链接</label>
-                        <textarea id="magnetLink" placeholder="magnet:?xt=urn:btih:..." class="w-full h-[116px] input-dark rounded p-3 text-sm resize-none font-mono"></textarea>
+                    
+                    <div class="md:col-span-1 flex items-center justify-center">
+                        <span class="text-xs text-slate-300 font-bold">OR</span>
+                    </div>
+
+                    <div class="md:col-span-6">
+                        <textarea id="magnetLink" placeholder="粘贴 Magnet 磁力链接..." class="w-full h-32 fresh-input p-4 text-xs font-mono resize-none"></textarea>
                     </div>
                 </div>
             </div>
 
-            <div class="glass-panel rounded-lg p-5">
-                <h2 class="text-lg font-medium mb-4 flex items-center gap-2 text-primary">
-                    <i class="fas fa-sliders-h"></i> 任务选项
-                </h2>
+            <div class="fresh-card p-6">
+                <h3 class="text-xs font-bold text-muted uppercase mb-4 flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-primary"></span> 任务参数
+                </h3>
                 
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-5">
-                    
-                    <div class="space-y-4">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-10 gap-y-6">
+                    <div class="space-y-5">
                         <div>
-                            <label class="block text-xs text-muted mb-1">保存路径 (Save Path)</label>
-                            <input type="text" id="savePath" class="w-full input-dark rounded px-3 py-1.5 text-sm">
+                            <label class="block text-xs font-semibold text-slate-500 mb-1.5">保存路径</label>
+                            <input type="text" id="savePath" class="w-full fresh-input px-3 py-2.5 text-sm" placeholder="/downloads/">
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-xs text-muted mb-1">分类 (Category)</label>
-                                <input type="text" id="category" class="w-full input-dark rounded px-3 py-1.5 text-sm">
+                                <label class="block text-xs font-semibold text-slate-500 mb-1.5">分类 (Category)</label>
+                                <input type="text" id="category" class="w-full fresh-input px-3 py-2.5 text-sm">
                             </div>
                             <div>
-                                <label class="block text-xs text-muted mb-1">标签 (Tags)</label>
-                                <input type="text" id="tags" placeholder="tag1, tag2" class="w-full input-dark rounded px-3 py-1.5 text-sm">
+                                <label class="block text-xs font-semibold text-slate-500 mb-1.5">标签 (Tags)</label>
+                                <input type="text" id="tags" class="w-full fresh-input px-3 py-2.5 text-sm">
                             </div>
                         </div>
-                        
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1.5">内容布局 (Content Layout)</label>
+                            <div class="relative">
+                                <select id="contentLayout" class="w-full fresh-input px-3 py-2.5 text-sm appearance-none cursor-pointer">
+                                    <option value="Original">原始 (创建子目录)</option>
+                                    <option value="NoSubFolder">不创建子目录</option>
+                                </select>
+                                <div class="absolute right-3 top-3 text-slate-400 pointer-events-none">
+                                    <i class="fas fa-chevron-down text-xs"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-5">
+                        <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                            <div class="flex justify-between items-center mb-3">
+                                <label class="text-xs font-bold text-slate-500 uppercase">速度限制</label>
+                                <span class="text-[10px] text-blue-500 bg-blue-50 px-2 py-0.5 rounded cursor-pointer hover:underline" onclick="openSettings()">修改预设值</span>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <label class="flex items-center justify-between cursor-pointer group p-2 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-100 hover:shadow-sm">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs">
+                                            <i class="fas fa-upload"></i>
+                                        </div>
+                                        <div>
+                                            <span class="text-sm font-medium text-slate-700 block">启用上传限速</span>
+                                            <span id="limitUlDisplay" class="text-[10px] text-slate-400">未配置预设值</span>
+                                        </div>
+                                    </div>
+                                    <input type="checkbox" id="useLimitUl" class="accent-primary w-5 h-5 rounded border-slate-300">
+                                </label>
+
+                                <label class="flex items-center justify-between cursor-pointer group p-2 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-100 hover:shadow-sm">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">
+                                            <i class="fas fa-download"></i>
+                                        </div>
+                                        <div>
+                                            <span class="text-sm font-medium text-slate-700 block">启用下载限速</span>
+                                            <span id="limitDlDisplay" class="text-[10px] text-slate-400">未配置预设值</span>
+                                        </div>
+                                    </div>
+                                    <input type="checkbox" id="useLimitDl" class="accent-primary w-5 h-5 rounded border-slate-300">
+                                </label>
+                            </div>
+                        </div>
+
                         <div class="pt-2">
-                            <label class="block text-xs text-muted mb-1">重命名 (可选)</label>
-                            <input type="text" id="rename" placeholder="不修改则留空" class="w-full input-dark rounded px-3 py-1.5 text-sm">
-                        </div>
-                    </div>
-
-                    <div class="space-y-4">
-                         <div class="grid grid-cols-2 gap-4 bg-surface2 p-3 rounded border border-border">
-                            <div>
-                                <label class="block text-xs text-muted mb-1">下载限速 (KiB/s)</label>
-                                <input type="number" id="limitDl" placeholder="无限制" class="w-full input-dark rounded px-3 py-1.5 text-sm">
-                            </div>
-                            <div>
-                                <label class="block text-xs text-muted mb-1">上传限速 (KiB/s)</label>
-                                <input type="number" id="limitUl" placeholder="无限制" class="w-full input-dark rounded px-3 py-1.5 text-sm">
-                            </div>
-                        </div>
-                        
-                        <div class="grid grid-cols-2 gap-2 text-sm pt-1">
-                            <label class="flex items-center gap-2 cursor-pointer hover:text-white text-gray-400">
+                             <label class="flex items-center gap-2 cursor-pointer select-none">
                                 <input type="checkbox" id="paused" class="accent-primary w-4 h-4 rounded">
-                                <span>添加后暂停</span>
-                            </label>
-                             <label class="flex items-center gap-2 cursor-pointer hover:text-white text-gray-400">
-                                <input type="checkbox" id="skipHash" class="accent-primary w-4 h-4 rounded">
-                                <span>跳过哈希校验</span>
-                            </label>
-                            <label class="flex items-center gap-2 cursor-pointer hover:text-white text-gray-400">
-                                <input type="checkbox" id="rootFolder" class="accent-primary w-4 h-4 rounded">
-                                <span>创建子目录</span>
-                            </label>
-                            <label class="flex items-center gap-2 cursor-pointer hover:text-white text-gray-400">
-                                <input type="checkbox" id="autoTMM" class="accent-primary w-4 h-4 rounded">
-                                <span>自动管理 (AutoTMM)</span>
-                            </label>
-                            <label class="flex items-center gap-2 cursor-pointer hover:text-white text-gray-400">
-                                <input type="checkbox" id="sequential" class="accent-primary w-4 h-4 rounded">
-                                <span>按顺序下载</span>
-                            </label>
-                            <label class="flex items-center gap-2 cursor-pointer hover:text-white text-gray-400">
-                                <input type="checkbox" id="firstLast" class="accent-primary w-4 h-4 rounded">
-                                <span>先下载首尾块</span>
+                                <span class="text-sm text-slate-600">添加任务后暂停 (Paused)</span>
                             </label>
                         </div>
                     </div>
                 </div>
+
+                <div class="mt-8 border-t border-slate-100 pt-6">
+                    <button onclick="distributeTorrent()" class="fresh-btn w-full py-3.5 font-bold text-sm tracking-wide flex justify-center items-center gap-2">
+                        <i class="fas fa-paper-plane"></i> 立即分发任务
+                    </button>
+                </div>
             </div>
 
-            <div class="flex gap-4 items-start">
-                 <button onclick="distributeTorrent()" class="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold py-4 rounded shadow-lg transform active:scale-95 transition-all text-lg tracking-wide">
-                    <i class="fas fa-paper-plane mr-2"></i> 开始分发任务
-                </button>
-            </div>
-            
-            <div class="glass-panel rounded-lg flex flex-col h-48">
-                <div class="p-2 border-b border-border bg-surface2 flex justify-between items-center px-4">
-                    <span class="text-xs font-mono text-muted">SYSTEM_LOG</span>
-                    <button onclick="document.getElementById('consoleLog').innerHTML=''" class="text-xs hover:text-white text-muted">Clear</button>
+            <div class="bg-white border border-slate-200 rounded-lg p-2 flex flex-col h-40 shadow-sm">
+                <div class="px-2 pb-2 flex justify-between items-center border-b border-slate-50">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operation Log</span>
+                    <button onclick="document.getElementById('consoleLog').innerHTML=''" class="text-[10px] text-slate-400 hover:text-primary">Clear</button>
                 </div>
-                <div id="consoleLog" class="flex-1 overflow-y-auto p-3 font-mono text-xs space-y-1 text-gray-400 bg-black">
-                    <div class="text-green-500">System Ready...</div>
+                <div id="consoleLog" class="flex-1 overflow-y-auto p-2 font-mono text-[11px] space-y-1.5 text-slate-600">
+                    <div class="text-primary"><i class="fas fa-check-circle mr-1"></i>System initialized.</div>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
 </main>
 
-<div id="settingsModal" class="fixed inset-0 bg-black/80 z-50 hidden flex items-center justify-center backdrop-blur-sm">
-    <div class="bg-surface border border-border rounded-lg w-full max-w-2xl shadow-2xl transform transition-all scale-100 p-0 overflow-hidden">
-        <div class="bg-surface2 p-4 border-b border-border flex justify-between items-center">
-            <h3 class="font-bold text-white"><i class="fas fa-cog text-primary mr-2"></i> 全局默认配置</h3>
-            <button onclick="closeSettings()" class="text-muted hover:text-white"><i class="fas fa-times"></i></button>
+<div id="addNodeModal" class="fixed inset-0 bg-slate-900/20 z-50 hidden flex items-center justify-center backdrop-blur-sm transition-opacity">
+    <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-5 transform transition-all scale-100">
+        <div class="flex justify-between items-center">
+            <h3 class="font-bold text-lg text-slate-800">添加下载器</h3>
+            <button onclick="toggleModal('addNodeModal')" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
         </div>
-        <div class="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-            <p class="text-xs text-muted bg-blue-900/20 border border-blue-900/50 p-3 rounded">
-                <i class="fas fa-info-circle mr-1"></i> 这里设置的值将作为每次打开页面时的默认值。
-            </p>
-
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-xs text-muted mb-1">默认保存路径</label>
-                    <input type="text" id="def_savePath" class="w-full input-dark rounded px-3 py-2 text-sm">
-                </div>
-                <div>
-                    <label class="block text-xs text-muted mb-1">默认分类</label>
-                    <input type="text" id="def_category" class="w-full input-dark rounded px-3 py-2 text-sm">
-                </div>
-                <div>
-                    <label class="block text-xs text-muted mb-1">默认标签</label>
-                    <input type="text" id="def_tags" class="w-full input-dark rounded px-3 py-2 text-sm">
-                </div>
-                <div>
-                    <label class="block text-xs text-muted mb-1">默认上传限速 (KiB/s)</label>
-                    <input type="number" id="def_limitUl" class="w-full input-dark rounded px-3 py-2 text-sm">
-                </div>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 mb-1">名称 (显示用)</label>
+                <input type="text" id="newNodeName" placeholder="例如: Hetzner 独服" class="w-full fresh-input px-3 py-2 text-sm">
             </div>
-
-            <div class="space-y-3 pt-2">
-                <span class="text-xs font-bold text-muted uppercase block border-b border-border pb-1">默认开关状态</span>
-                <div class="grid grid-cols-3 gap-3">
-                    <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-300">
-                        <input type="checkbox" id="def_rootFolder" class="accent-primary"> 创建子目录
-                    </label>
-                    <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-300">
-                        <input type="checkbox" id="def_autoTMM" class="accent-primary"> AutoTMM
-                    </label>
-                    <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-300">
-                        <input type="checkbox" id="def_paused" class="accent-primary"> 暂停添加
-                    </label>
-                     <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-300">
-                        <input type="checkbox" id="def_skipHash" class="accent-primary"> 跳过哈希校验
-                    </label>
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 mb-1">地址 (Host)</label>
+                <input type="text" id="newHost" placeholder="http://IP:Port" class="w-full fresh-input px-3 py-2 text-sm">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">用户名</label>
+                    <input type="text" id="newUser" class="w-full fresh-input px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">密码</label>
+                    <input type="password" id="newPass" class="w-full fresh-input px-3 py-2 text-sm">
                 </div>
             </div>
         </div>
-        <div class="p-4 bg-surface2 border-t border-border flex justify-end gap-3">
-            <button onclick="closeSettings()" class="px-4 py-2 rounded text-sm text-gray-400 hover:text-white">取消</button>
-            <button onclick="saveSettings()" class="px-6 py-2 rounded text-sm bg-primary hover:bg-blue-600 text-white font-medium">保存配置</button>
+        <div class="flex justify-end gap-3 pt-2">
+            <button onclick="toggleModal('addNodeModal')" class="px-4 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 rounded-lg">取消</button>
+            <button onclick="addServer()" class="px-5 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-blue-600 shadow-sm shadow-blue-200">保存</button>
+        </div>
+    </div>
+</div>
+
+<div id="settingsModal" class="fixed inset-0 bg-slate-900/20 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+    <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+        <div class="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
+            <h3 class="font-bold text-slate-800">全局配置 & 限速预设</h3>
+            <button onclick="toggleModal('settingsModal')" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-6 space-y-6">
+            <div class="bg-blue-50/50 rounded-xl p-4 border border-blue-100 space-y-3">
+                <div class="flex items-center gap-2 text-primary">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span class="text-xs font-bold uppercase">限速预设值 (Preset Values)</span>
+                </div>
+                <p class="text-[10px] text-slate-500">在主界面勾选限速时，将应用以下数值。</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">上传限速 (KiB/s)</label>
+                        <input type="number" id="def_presetUl" class="w-full fresh-input px-3 py-2 text-sm bg-white" placeholder="例如: 10240">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">下载限速 (KiB/s)</label>
+                        <input type="number" id="def_presetDl" class="w-full fresh-input px-3 py-2 text-sm bg-white" placeholder="留空则不限制">
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Default Form Values</span>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">默认保存路径</label>
+                    <input type="text" id="def_savePath" class="w-full fresh-input px-3 py-2 text-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">默认分类</label>
+                        <input type="text" id="def_category" class="w-full fresh-input px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">默认标签</label>
+                        <input type="text" id="def_tags" class="w-full fresh-input px-3 py-2 text-sm">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+            <button onclick="saveSettings()" class="px-6 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-blue-600 shadow-md shadow-blue-200">保存配置</button>
         </div>
     </div>
 </div>
 
 <script>
-    // --- State & Helpers ---
-    let serverCount = 0;
+    // --- Frontend Logic ---
+    let globalConfig = {};
+
+    function toggleModal(id) {
+        document.getElementById(id).classList.toggle('hidden');
+    }
 
     function log(msg, type='info') {
         const box = document.getElementById('consoleLog');
         const time = new Date().toLocaleTimeString('en-US', {hour12: false});
-        let color = 'text-gray-400';
-        if(type === 'success') color = 'text-green-400';
-        if(type === 'error') color = 'text-red-400';
+        let color = 'text-slate-600';
+        let icon = '<i class="fas fa-info-circle text-xs mr-1 opacity-50"></i>';
         
-        box.innerHTML += `<div class="${color} font-mono border-l-2 border-transparent pl-2 hover:bg-white/5"><span class="opacity-50">[${time}]</span> ${msg}</div>`;
+        if(type === 'success') { color = 'text-emerald-600'; icon = '<i class="fas fa-check text-xs mr-1"></i>'; }
+        if(type === 'error') { color = 'text-red-500'; icon = '<i class="fas fa-times text-xs mr-1"></i>'; }
+        
+        box.innerHTML += `<div class="${color} flex items-center"><span class="opacity-40 text-[10px] mr-2 font-normal">${time}</span>${icon}<span>${msg}</span></div>`;
         box.scrollTop = box.scrollHeight;
     }
 
     function updateFileName(input) {
         const display = document.getElementById('fileNameDisplay');
+        const zone = document.getElementById('fileDropZone');
         if (input.files && input.files[0]) {
-            display.innerHTML = `<span class="text-white font-medium">${input.files[0].name}</span>`;
-            display.parentElement.classList.add('border-primary', 'bg-blue-900/10');
+            display.innerText = input.files[0].name;
+            display.className = "text-xs font-bold text-primary";
+            zone.classList.add('border-primary', 'bg-blue-50');
         } else {
-            display.innerHTML = '拖拽文件或点击选择';
-            display.parentElement.classList.remove('border-primary', 'bg-blue-900/10');
+            display.innerText = '点击上传 .torrent 文件';
+            display.className = "text-xs font-medium text-slate-500";
+            zone.classList.remove('border-primary', 'bg-blue-50');
         }
     }
 
-    function toggleAddNodePanel() {
-        const panel = document.getElementById('addNodePanel');
-        panel.classList.toggle('hidden');
-    }
+    // --- API Interactions ---
 
-    // --- API Calls ---
+    async function loadData() {
+        const res = await fetch('/api/config');
+        const data = await res.json();
+        globalConfig = data;
+        const servers = data.servers || [];
+        const defaults = data.defaults || {};
 
-    async function loadServers() {
-        try {
-            const res = await fetch('/api/config');
-            const data = await res.json();
-            const servers = data.servers || [];
-            const defaults = data.defaults || {};
+        // 1. Render Server List
+        const container = document.getElementById('serverList');
+        container.innerHTML = '';
+        if(servers.length === 0) {
+            container.innerHTML = '<div class="text-center py-8 text-xs text-muted">暂无节点<br>请点击下方按钮添加</div>';
+        }
+        
+        servers.forEach((s, idx) => {
+            const displayName = s.name || s.host; 
+            const displaySub = s.name ? s.host : '';
 
-            // Render Servers
-            const container = document.getElementById('serverList');
-            container.innerHTML = '';
-            
-            if(servers.length === 0) {
-                container.innerHTML = '<div class="text-muted text-center text-xs py-8 opacity-50">暂无节点</div>';
-            } else {
-                servers.forEach((s, idx) => {
-                    const div = document.createElement('div');
-                    div.className = 'group flex justify-between items-center bg-surface2 p-3 rounded border border-transparent hover:border-primary transition-all cursor-default';
-                    div.innerHTML = `
-                        <div class="overflow-hidden">
-                            <div class="font-bold text-xs text-gray-300 group-hover:text-white truncate"><i class="fas fa-server mr-2 text-muted"></i>${s.host}</div>
-                            <div class="text-[10px] text-gray-600 pl-5">${s.username}</div>
-                        </div>
-                        <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onclick="testServer(${idx})" class="text-xs bg-black/50 hover:bg-primary hover:text-white text-muted p-1.5 rounded"><i class="fas fa-plug"></i></button>
-                            <button onclick="removeServer(${idx})" class="text-xs bg-black/50 hover:bg-red-600 hover:text-white text-muted p-1.5 rounded"><i class="fas fa-trash"></i></button>
-                        </div>
-                    `;
-                    container.appendChild(div);
-                });
-            }
+            const div = document.createElement('div');
+            div.className = 'bg-white border border-slate-100 p-3 rounded-lg hover:border-primary/50 hover:shadow-md transition-all group cursor-default mb-2';
+            div.innerHTML = `
+                <div class="flex justify-between items-start mb-1">
+                    <div class="flex-1 min-w-0 pr-2">
+                        <div class="font-bold text-sm text-slate-700 truncate">${displayName}</div>
+                        <div class="text-[10px] text-slate-400 truncate font-mono">${displaySub}</div>
+                    </div>
+                    <div id="status-${idx}" class="status-dot status-pending mt-1.5" title="Pending"></div>
+                </div>
+                <div class="flex gap-3 mt-2 pt-2 border-t border-slate-50 opacity-60 group-hover:opacity-100 transition-opacity">
+                    <button onclick="removeServer(${idx})" class="text-[10px] font-medium text-slate-400 hover:text-red-500 flex items-center gap-1"><i class="fas fa-trash"></i> 删除</button>
+                    <button onclick="testServer(${idx})" class="text-[10px] font-medium text-slate-400 hover:text-primary flex items-center gap-1"><i class="fas fa-sync-alt"></i> 测试</button>
+                </div>
+            `;
+            container.appendChild(div);
+            setTimeout(() => testServer(idx, true), idx * 200 + 300);
+        });
 
-            // Apply Defaults ONLY if form is empty (simple check)
-            if(!document.getElementById('savePath').value) {
-                document.getElementById('savePath').value = defaults.savePath || '';
-                document.getElementById('category').value = defaults.category || '';
-                document.getElementById('tags').value = defaults.tags || '';
-                document.getElementById('limitUl').value = defaults.limitUl || '';
-                document.getElementById('limitDl').value = defaults.limitDl || '';
-                
-                document.getElementById('rootFolder').checked = defaults.rootFolder !== false; // Default true
-                document.getElementById('autoTMM').checked = defaults.autoTMM === true;
-                document.getElementById('paused').checked = defaults.paused === true;
-                document.getElementById('skipHash').checked = defaults.skipHash === true;
-            }
+        // 2. Fill Defaults
+        if(!document.getElementById('savePath').value) {
+            document.getElementById('savePath').value = defaults.savePath || '';
+            document.getElementById('category').value = defaults.category || '';
+            document.getElementById('tags').value = defaults.tags || '';
+        }
 
-        } catch(e) { console.error(e); }
+        // 3. Update Preset Displays
+        const ulLimit = defaults.presetUl ? `${defaults.presetUl} KiB/s` : '未配置';
+        const dlLimit = defaults.presetDl ? `${defaults.presetDl} KiB/s` : '未配置';
+        document.getElementById('limitUlDisplay').innerText = ulLimit;
+        document.getElementById('limitDlDisplay').innerText = dlLimit;
     }
 
     async function addServer() {
+        const name = document.getElementById('newNodeName').value.trim();
         const host = document.getElementById('newHost').value.trim();
         const username = document.getElementById('newUser').value.trim();
         const password = document.getElementById('newPass').value.trim();
-        if(!host || !username) return alert("Host and Username required");
+
+        if(!host || !username) return alert("地址和用户名必填");
 
         await fetch('/api/servers', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ host, username, password })
+            body: JSON.stringify({ name, host, username, password })
         });
         
+        document.getElementById('newNodeName').value = '';
         document.getElementById('newHost').value = '';
         document.getElementById('newUser').value = '';
         document.getElementById('newPass').value = '';
-        toggleAddNodePanel();
-        loadServers();
-        log(`添加节点: ${host}`, 'success');
+        
+        toggleModal('addNodeModal');
+        loadData();
+        log(`节点已保存: ${name || host}`, 'success');
     }
 
     async function removeServer(idx) {
-        if(!confirm("确认删除该节点?")) return;
+        if(!confirm("确认移除该下载器配置?")) return;
         await fetch(`/api/servers/${idx}`, { method: 'DELETE' });
-        loadServers();
-    }
-    
-    async function testServer(idx) {
-        log(`正在连接节点 #${idx+1}...`);
-        const res = await fetch(`/api/servers/${idx}/test`, { method: 'POST' });
-        const data = await res.json();
-        if(data.success) log(`[OK] 节点 #${idx+1} 连接成功 (v${data.version})`, 'success');
-        else log(`[Error] 节点 #${idx+1} 连接失败: ${data.error}`, 'error');
+        loadData();
     }
 
-    // --- Settings Modal Logic ---
+    async function testServer(idx, silent=false) {
+        if(!silent) log(`正在连接节点 #${idx+1}...`);
+        const indicator = document.getElementById(`status-${idx}`);
+        
+        try {
+            const res = await fetch(`/api/servers/${idx}/test`, { method: 'POST' });
+            const data = await res.json();
+            if(data.success) {
+                indicator.classList.remove('status-pending', 'status-offline');
+                indicator.classList.add('status-online');
+                if(!silent) log(`节点 #${idx+1} 连接成功 (v${data.version})`, 'success');
+            } else {
+                indicator.classList.remove('status-pending', 'status-online');
+                indicator.classList.add('status-offline');
+                if(!silent) log(`节点 #${idx+1} 连接失败: ${data.error}`, 'error');
+            }
+        } catch(e) {
+            indicator.classList.add('status-offline');
+        }
+    }
+
+    // --- Settings Logic ---
     async function openSettings() {
-        const res = await fetch('/api/config');
-        const data = await res.json();
-        const d = data.defaults || {};
-
+        const d = globalConfig.defaults || {};
+        document.getElementById('def_presetUl').value = d.presetUl || '';
+        document.getElementById('def_presetDl').value = d.presetDl || '';
         document.getElementById('def_savePath').value = d.savePath || '';
         document.getElementById('def_category').value = d.category || '';
         document.getElementById('def_tags').value = d.tags || '';
-        document.getElementById('def_limitUl').value = d.limitUl || '';
         
-        document.getElementById('def_rootFolder').checked = d.rootFolder !== false;
-        document.getElementById('def_autoTMM').checked = d.autoTMM === true;
-        document.getElementById('def_paused').checked = d.paused === true;
-        document.getElementById('def_skipHash').checked = d.skipHash === true;
-
-        document.getElementById('settingsModal').classList.remove('hidden');
-    }
-
-    function closeSettings() {
-        document.getElementById('settingsModal').classList.add('hidden');
+        toggleModal('settingsModal');
     }
 
     async function saveSettings() {
         const defaults = {
+            presetUl: document.getElementById('def_presetUl').value,
+            presetDl: document.getElementById('def_presetDl').value,
             savePath: document.getElementById('def_savePath').value,
             category: document.getElementById('def_category').value,
             tags: document.getElementById('def_tags').value,
-            limitUl: document.getElementById('def_limitUl').value,
-            rootFolder: document.getElementById('def_rootFolder').checked,
-            autoTMM: document.getElementById('def_autoTMM').checked,
-            paused: document.getElementById('def_paused').checked,
-            skipHash: document.getElementById('def_skipHash').checked
         };
 
         await fetch('/api/settings', {
@@ -440,53 +514,45 @@ HTML_TEMPLATE = """
             body: JSON.stringify(defaults)
         });
         
-        closeSettings();
-        log('全局默认配置已保存', 'success');
-        // Reload to apply defaults to current fields if empty
-        window.location.reload(); 
+        toggleModal('settingsModal');
+        log('全局预设已更新', 'success');
+        loadData();
     }
 
-    // --- Distribution Logic ---
+    // --- Distribute Logic ---
     async function distributeTorrent() {
         const fileInput = document.getElementById('torrentFile');
         const magnet = document.getElementById('magnetLink').value.trim();
         
-        if (!fileInput.files[0] && !magnet) return alert("请选择种子文件或输入磁力链接");
+        if (!fileInput.files[0] && !magnet) return alert("请上传种子文件或输入磁力链接");
 
         const formData = new FormData();
         if (fileInput.files[0]) formData.append('file', fileInput.files[0]);
         if (magnet) formData.append('magnet', magnet);
 
-        // Map basic fields
         formData.append('save_path', document.getElementById('savePath').value.trim());
         formData.append('category', document.getElementById('category').value.trim());
         formData.append('tags', document.getElementById('tags').value.trim());
-        formData.append('rename', document.getElementById('rename').value.trim());
         
-        // Map Limits (Convert KiB to Bytes later or pass raw) - We pass raw int here
-        formData.append('up_limit', document.getElementById('limitUl').value);
-        formData.append('dl_limit', document.getElementById('limitDl').value);
+        formData.append('use_limit_ul', document.getElementById('useLimitUl').checked);
+        formData.append('use_limit_dl', document.getElementById('useLimitDl').checked);
 
-        // Map Booleans
+        formData.append('content_layout', document.getElementById('contentLayout').value);
         formData.append('paused', document.getElementById('paused').checked);
-        formData.append('root_folder', document.getElementById('rootFolder').checked);
-        formData.append('auto_tmm', document.getElementById('autoTMM').checked);
-        formData.append('skip_hash', document.getElementById('skipHash').checked);
-        formData.append('sequential', document.getElementById('sequential').checked);
-        formData.append('first_last', document.getElementById('firstLast').checked);
 
-        log(">>> 开始任务分发...", 'info');
+        log(">>> 开始分发任务...", 'info');
 
         try {
             const res = await fetch('/api/distribute', { method: 'POST', body: formData });
             const result = await res.json();
             
             result.results.forEach(r => {
-                if(r.success) log(`[发送成功] -> ${r.server}`, 'success');
-                else log(`[发送失败] -> ${r.server}: ${r.error}`, 'error');
+                const sName = r.name || r.server; 
+                if(r.success) log(`[成功] -> ${sName}`, 'success');
+                else log(`[失败] -> ${sName}: ${r.error}`, 'error');
             });
             
-            if(result.results.every(r => r.success)) log(">>> 所有节点分发完成。", 'success');
+            if(result.results.every(r => r.success)) log(">>> 所有任务分发完成", 'success');
 
         } catch (e) {
             log("系统错误: " + e.message, 'error');
@@ -494,8 +560,7 @@ HTML_TEMPLATE = """
     }
 
     // Init
-    loadServers();
-
+    loadData();
 </script>
 </body>
 </html>
@@ -508,8 +573,7 @@ def load_data_file():
     try:
         with open(CONFIG_FILE, 'r') as f: 
             data = json.load(f)
-            if isinstance(data, list): # 兼容旧版格式
-                return {"servers": data, "defaults": {}}
+            if isinstance(data, list): return {"servers": data, "defaults": {}}
             return data
     except: return {"servers": [], "defaults": {}}
 
@@ -522,13 +586,12 @@ def get_client(server_conf):
         username=server_conf['username'],
         password=server_conf['password'],
         VERIFY_WEBUI_CERTIFICATE=False,
-        REQUESTS_TIMEOUT=20
+        REQUESTS_TIMEOUT=15
     )
 
 @app.route('/')
 def index(): return render_template_string(HTML_TEMPLATE)
 
-# --- 统一配置接口 (Server List + Defaults) ---
 @app.route('/api/config', methods=['GET'])
 def get_config():
     return jsonify(load_data_file())
@@ -541,22 +604,26 @@ def save_settings():
     save_data_file(data)
     return jsonify({'success': True})
 
-# --- Server Management ---
 @app.route('/api/servers', methods=['POST'])
 def add_server():
     req = request.json
     data = load_data_file()
     
-    # Update if exists, else add
+    new_node = {
+        'name': req.get('name', ''),
+        'host': req['host'],
+        'username': req['username'],
+        'password': req['password']
+    }
+    
     found = False
     for s in data['servers']:
         if s['host'] == req['host']:
-            s['username'] = req['username']
-            s['password'] = req['password']
+            s.update(new_node)
             found = True
             break
     if not found:
-        data['servers'].append(req)
+        data['servers'].append(new_node)
     
     save_data_file(data)
     return jsonify({'success': True})
@@ -583,52 +650,55 @@ def test_server(idx):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-# --- 核心分发逻辑 (增强版) ---
 @app.route('/api/distribute', methods=['POST'])
 def distribute():
     data = load_data_file()
     servers = data['servers']
+    defaults = data.get('defaults', {})
+    
     if not servers: return jsonify({'results': [], 'error': 'No nodes linked'})
 
     magnet = request.form.get('magnet')
     torrent_file = request.files.get('file')
     
-    # 处理限速单位: 输入为 KiB/s -> API 需要 Bytes/s
-    def get_limit_bytes(key):
-        val = request.form.get(key)
-        if val and val.isdigit():
+    # 获取限速预设值 (KiB -> Bytes)
+    def get_preset_bytes(key):
+        val = defaults.get(key)
+        if val and str(val).isdigit():
             return int(val) * 1024
         return None
 
-    # 构建 qBittorrent API 参数
-    # 参考: https://qbittorrent-api.readthedocs.io/en/latest/modules/torrents.html#qbittorrentapi.torrents.Torrents.add
+    up_limit = None
+    dl_limit = None
+    
+    if request.form.get('use_limit_ul') == 'true':
+        up_limit = get_preset_bytes('presetUl')
+    
+    if request.form.get('use_limit_dl') == 'true':
+        dl_limit = get_preset_bytes('presetDl')
+
+    # 内容布局
+    layout_val = request.form.get('content_layout', 'Original')
+    is_root_folder = (layout_val == 'Original')
+
     options = {
         'save_path': request.form.get('save_path') or None,
         'category': request.form.get('category') or None,
         'tags': request.form.get('tags') or None,
-        'rename': request.form.get('rename') or None,
-        
-        # Boolean Flags
         'is_paused': request.form.get('paused') == 'true',
-        'is_root_folder': request.form.get('root_folder') == 'true', # Create Subfolder
-        'use_auto_torrent_management': request.form.get('auto_tmm') == 'true',
-        'is_sequential_download': request.form.get('sequential') == 'true',
-        'is_first_last_piece_priority': request.form.get('first_last') == 'true',
-        'is_skip_checking': request.form.get('skip_hash') == 'true',
-        
-        # Limits
-        'up_limit': get_limit_bytes('up_limit'),
-        'dl_limit': get_limit_bytes('dl_limit'),
+        'content_layout': layout_val,
+        'is_root_folder': is_root_folder,
+        'up_limit': up_limit,
+        'dl_limit': dl_limit,
     }
-
-    # 移除 None 值的参数，避免覆盖默认值
+    
     options = {k: v for k, v in options.items() if v is not None}
 
     file_data = torrent_file.read() if torrent_file else None
     results = []
 
     def task(srv):
-        res = {'server': srv['host'], 'success': False}
+        res = {'server': srv['host'], 'name': srv.get('name', ''), 'success': False}
         try:
             qb = get_client(srv)
             qb.auth_log_in()

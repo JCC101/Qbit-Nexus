@@ -12,7 +12,7 @@ CONFIG_FILE = os.path.join(DATA_DIR, 'nexus_config.json')
 
 app = Flask(__name__)
 
-# --- 嵌入式 HTML 模板 (清爽明亮版 v2.1 - 修复限速) ---
+# --- 嵌入式 HTML 模板 (v2.2 - 修复设置按钮失效问题) ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -315,6 +315,18 @@ HTML_TEMPLATE = """
         }
     }
 
+    // --- 修复：添加了遗漏的 openSettings 函数 ---
+    async function openSettings() {
+        const d = globalConfig.defaults || {};
+        document.getElementById('def_presetUl').value = d.presetUl || '';
+        document.getElementById('def_presetDl').value = d.presetDl || '';
+        document.getElementById('def_savePath').value = d.savePath || '';
+        document.getElementById('def_category').value = d.category || '';
+        document.getElementById('def_tags').value = d.tags || '';
+        
+        toggleModal('settingsModal');
+    }
+
     async function loadData() {
         const res = await fetch('/api/config');
         const data = await res.json();
@@ -559,7 +571,7 @@ def distribute():
         'is_paused': request.form.get('paused') == 'true',
         'content_layout': layout_val,
         'is_root_folder': (layout_val == 'Original'),
-        # 修复：使用全称参数名，确保库能正确解析
+        # 使用全称参数名
         'upload_limit': up_limit, 
         'download_limit': dl_limit,
     }

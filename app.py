@@ -12,7 +12,7 @@ CONFIG_FILE = os.path.join(DATA_DIR, 'nexus_config.json')
 
 app = Flask(__name__)
 
-# --- 嵌入式 HTML 模板 (v3.1 - 原生选项 + 预设限速融合版) ---
+# --- 嵌入式 HTML 模板 (v3.2 - 隐私保护 + 界面去重) ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -45,19 +45,14 @@ HTML_TEMPLATE = """
         .fresh-input:focus { background-color: #ffffff; border-color: #0ea5e9; outline: none; box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1); }
         .fresh-label { display: block; font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 0.25rem; }
         .section-title { font-size: 0.85rem; font-weight: 700; color: #0ea5e9; text-transform: uppercase; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
-        
-        /* 紧凑复选框 */
         .check-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: #475569; cursor: pointer; user-select: none; }
         .check-item input { accent-color: #0ea5e9; width: 1rem; height: 1rem; border-radius: 4px; }
-        
         .fresh-btn { background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%); color: white; border-radius: 0.5rem; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2); }
         .fresh-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 10px -1px rgba(59, 130, 246, 0.3); }
-        
         .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; }
         .status-online { background-color: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
         .status-offline { background-color: #ef4444; }
         .status-pending { background-color: #cbd5e1; }
-        
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
@@ -140,25 +135,12 @@ HTML_TEMPLATE = """
                             </div>
                         </div>
 
-                        <div>
-                            <label class="fresh-label">保存路径 (Save Path)</label>
-                            <input type="text" id="savePath" class="w-full fresh-input px-3 py-2 text-sm" placeholder="默认路径...">
-                        </div>
-
-                        <div>
-                            <label class="fresh-label">重命名 (可选)</label>
-                            <input type="text" id="rename" class="w-full fresh-input px-3 py-2 text-sm" placeholder="保持原名则留空">
-                        </div>
+                        <div><label class="fresh-label">保存路径 (Save Path)</label><input type="text" id="savePath" class="w-full fresh-input px-3 py-2 text-sm" placeholder="默认路径..."></div>
+                        <div><label class="fresh-label">重命名 (可选)</label><input type="text" id="rename" class="w-full fresh-input px-3 py-2 text-sm" placeholder="保持原名则留空"></div>
 
                         <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="fresh-label">分类 (Category)</label>
-                                <input type="text" id="category" class="w-full fresh-input px-3 py-2 text-sm">
-                            </div>
-                            <div>
-                                <label class="fresh-label">标签 (Tags)</label>
-                                <input type="text" id="tags" class="w-full fresh-input px-3 py-2 text-sm">
-                            </div>
+                            <div><label class="fresh-label">分类 (Category)</label><input type="text" id="category" class="w-full fresh-input px-3 py-2 text-sm"></div>
+                            <div><label class="fresh-label">标签 (Tags)</label><input type="text" id="tags" class="w-full fresh-input px-3 py-2 text-sm"></div>
                         </div>
                     </div>
 
@@ -166,16 +148,12 @@ HTML_TEMPLATE = """
                         <div class="space-y-3 bg-slate-50 p-3 rounded-lg border border-slate-100">
                             <div class="flex justify-between items-center mb-1">
                                 <label class="text-xs font-bold text-slate-400 uppercase">速度限制 (Use Presets)</label>
-                                <span class="text-[10px] text-primary cursor-pointer hover:underline" onclick="openSettings()">设置预设值</span>
                             </div>
                             
                             <label class="flex items-center justify-between cursor-pointer group p-1.5 hover:bg-white rounded transition-colors">
                                 <div class="flex items-center gap-2">
                                     <div class="w-6 h-6 rounded bg-green-100 text-green-600 flex items-center justify-center text-[10px]"><i class="fas fa-upload"></i></div>
-                                    <div>
-                                        <span class="text-xs font-medium text-slate-700 block">启用上传限速</span>
-                                        <span id="limitUlDisplay" class="text-[10px] text-slate-400">未配置</span>
-                                    </div>
+                                    <div><span class="text-xs font-medium text-slate-700 block">启用上传限速</span><span id="limitUlDisplay" class="text-[10px] text-slate-400">未配置</span></div>
                                 </div>
                                 <input type="checkbox" id="useLimitUl" class="accent-primary w-4 h-4 rounded">
                             </label>
@@ -183,10 +161,7 @@ HTML_TEMPLATE = """
                             <label class="flex items-center justify-between cursor-pointer group p-1.5 hover:bg-white rounded transition-colors">
                                 <div class="flex items-center gap-2">
                                     <div class="w-6 h-6 rounded bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]"><i class="fas fa-download"></i></div>
-                                    <div>
-                                        <span class="text-xs font-medium text-slate-700 block">启用下载限速</span>
-                                        <span id="limitDlDisplay" class="text-[10px] text-slate-400">未配置</span>
-                                    </div>
+                                    <div><span class="text-xs font-medium text-slate-700 block">启用下载限速</span><span id="limitDlDisplay" class="text-[10px] text-slate-400">未配置</span></div>
                                 </div>
                                 <input type="checkbox" id="useLimitDl" class="accent-primary w-4 h-4 rounded">
                             </label>
@@ -195,14 +170,8 @@ HTML_TEMPLATE = """
                         <div class="space-y-3 pt-1">
                             <label class="text-xs font-bold text-slate-400 uppercase">停止条件 (Stop Condition)</label>
                             <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="fresh-label">最大分享率</label>
-                                    <input type="number" id="ratioLimit" class="w-full fresh-input px-2 py-1.5 text-sm" placeholder="无">
-                                </div>
-                                <div>
-                                    <label class="fresh-label">做种时间(分钟)</label>
-                                    <input type="number" id="seedingTimeLimit" class="w-full fresh-input px-2 py-1.5 text-sm" placeholder="无">
-                                </div>
+                                <div><label class="fresh-label">最大分享率</label><input type="number" id="ratioLimit" class="w-full fresh-input px-2 py-1.5 text-sm" placeholder="无"></div>
+                                <div><label class="fresh-label">做种时间(分钟)</label><input type="number" id="seedingTimeLimit" class="w-full fresh-input px-2 py-1.5 text-sm" placeholder="无"></div>
                             </div>
                         </div>
                     </div>
@@ -297,6 +266,14 @@ HTML_TEMPLATE = """
         toggleModal('settingsModal');
     }
 
+    // --- 脱敏辅助函数 ---
+    function maskUrl(urlStr) {
+        try {
+            // 简单处理 http://1.2.3.4:8080 -> http://1.***.***.4:8080
+            return urlStr.replace(/(\d{1,3}\.)\d{1,3}\.\d{1,3}(\.\d{1,3})/, '$1***.***$2');
+        } catch(e) { return '******'; }
+    }
+
     function log(msg, type='info') {
         const box = document.getElementById('consoleLog');
         const time = new Date().toLocaleTimeString('en-US', {hour12: false});
@@ -337,13 +314,15 @@ HTML_TEMPLATE = """
 
         servers.forEach((s, idx) => {
             const displayName = s.name || s.host; 
+            const safeHost = maskUrl(s.host); // 使用脱敏后的地址
+
             // Sidebar Item
             const div = document.createElement('div');
             div.className = 'bg-white border border-slate-100 p-2 rounded hover:border-primary/50 transition-all mb-2 flex justify-between items-center group';
             div.innerHTML = `
                 <div class="overflow-hidden pr-2">
                     <div class="font-bold text-xs text-slate-700 truncate">${displayName}</div>
-                    <div class="text-[10px] text-slate-400 truncate">${s.host}</div>
+                    <div class="text-[10px] text-slate-400 truncate font-mono">${safeHost}</div>
                 </div>
                 <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onclick="removeServer(${idx})" class="text-slate-400 hover:text-red-500"><i class="fas fa-trash text-xs"></i></button>

@@ -12,7 +12,7 @@ CONFIG_FILE = os.path.join(DATA_DIR, 'nexus_config.json')
 
 app = Flask(__name__)
 
-# --- 嵌入式 HTML 模板 (清爽明亮版) ---
+# --- 嵌入式 HTML 模板 (清爽明亮版 - Morning Mist) ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -586,7 +586,8 @@ def get_client(server_conf):
         username=server_conf['username'],
         password=server_conf['password'],
         VERIFY_WEBUI_CERTIFICATE=False,
-        REQUESTS_TIMEOUT=15
+        # 修复：使用 REQUESTS_ARGS 字典传递 timeout，兼容新版 qbittorrent-api
+        REQUESTS_ARGS={'timeout': 15}
     )
 
 @app.route('/')

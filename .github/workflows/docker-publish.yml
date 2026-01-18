@@ -1,9 +1,10 @@
 name: Build and Push Docker Image
 
 # 触发条件：推送到 main 分支，或发布新的 Release (tag)
-on:
+于:
+  workflow_dispatch:      # <--- 新增这行：允许手动点击按钮运行
   push:
-    branches: [ "main", "master" ]
+    分支: [ "main", "master" ]
   release:
     types: [ published ]
 
@@ -48,7 +49,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
+          标签: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag
             type=semver,pattern={{version}}
@@ -61,5 +62,5 @@ jobs:
           push: true
           # 开启多架构支持 (x86 和 ARM64/Mac M1)，适合 NAS 用户
           platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
+          标签: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

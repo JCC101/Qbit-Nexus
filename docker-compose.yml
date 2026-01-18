@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  nexus:
+    build: .
+    container_name: qbit-nexus
+    restart: unless-stopped
+    ports:
+      # 格式: "宿主机端口:容器端口"
+      # 默认使用 6688 端口访问
+      # 你可以在这里直接修改 6688 为其他端口，或者在 .env 文件中设置 NEXUS_PORT
+      - "${NEXUS_PORT:-6688}:5000"
+    volumes:
+      # 将宿主机的 data 目录映射到容器内的 /data
+      # 确保服务器列表 (nexus_config.json) 持久化保存
+      - ./data:/data
+    environment:
+      # 告诉应用程序数据存储位置
+      - DATA_DIR=/data
+      # 设置时区，方便日志查看
+      - TZ=Asia/Shanghai

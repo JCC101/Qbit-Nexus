@@ -12,7 +12,7 @@ CONFIG_FILE = os.path.join(DATA_DIR, 'nexus_config.json')
 
 app = Flask(__name__)
 
-# --- 嵌入式 HTML 模板 (清爽明亮版 v2.0) ---
+# --- 嵌入式 HTML 模板 (清爽明亮版 v2.1 - 修复限速) ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -75,7 +75,6 @@ HTML_TEMPLATE = """
         .status-offline { background-color: #ef4444; }
         .status-pending { background-color: #cbd5e1; }
         
-        /* 滚动条 */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
@@ -323,12 +322,12 @@ HTML_TEMPLATE = """
         const servers = data.servers || [];
         const defaults = data.defaults || {};
 
-        // 1. Render Sidebar List
+        // Sidebar
         const container = document.getElementById('serverList');
         container.innerHTML = '';
         if(servers.length === 0) container.innerHTML = '<div class="text-center py-8 text-xs text-muted">暂无节点</div>';
         
-        // 2. Render Target Selection Checkboxes (New)
+        // Target Checkboxes
         const targetContainer = document.getElementById('targetSelectionArea');
         targetContainer.innerHTML = '';
         if(servers.length === 0) targetContainer.innerHTML = '<div class="col-span-4 text-center text-xs text-muted py-4">暂无可用节点，请先添加</div>';
@@ -367,7 +366,7 @@ HTML_TEMPLATE = """
             setTimeout(() => testServer(idx, true), idx * 200 + 300);
         });
 
-        // 3. Fill Defaults
+        // Defaults
         if(!document.getElementById('savePath').value) {
             document.getElementById('savePath').value = defaults.savePath || '';
             document.getElementById('category').value = defaults.category || '';
@@ -415,7 +414,6 @@ HTML_TEMPLATE = """
         const magnet = document.getElementById('magnetLink').value.trim();
         if (!fileInput.files[0] && !magnet) return alert("请上传种子或输入磁力链");
 
-        // 收集选中的节点
         const selectedNodes = Array.from(document.querySelectorAll('input[name="targetNode"]:checked')).map(cb => parseInt(cb.value));
         if(selectedNodes.length === 0) return alert("请至少选择一个目标节点！");
 
@@ -423,7 +421,7 @@ HTML_TEMPLATE = """
         if (fileInput.files[0]) formData.append('file', fileInput.files[0]);
         if (magnet) formData.append('magnet', magnet);
 
-        formData.append('targets', JSON.stringify(selectedNodes)); // 发送选中节点列表
+        formData.append('targets', JSON.stringify(selectedNodes));
         formData.append('save_path', document.getElementById('savePath').value.trim());
         formData.append('category', document.getElementById('category').value.trim());
         formData.append('tags', document.getElementById('tags').value.trim());
@@ -437,6 +435,13 @@ HTML_TEMPLATE = """
         try {
             const res = await fetch('/api/distribute', { method: 'POST', body: formData });
             const result = await res.json();
+            
+            // 显示调试信息 (Debug Info)
+            if(result.debug_limits) {
+               if(result.debug_limits.up) log(`[调试] 上传限速已启用: ${result.debug_limits.up} Bytes/s`);
+               if(result.debug_limits.dl) log(`[调试] 下载限速已启用: ${result.debug_limits.dl} Bytes/s`);
+            }
+
             result.results.forEach(r => {
                 const sName = r.name || r.server; 
                 log(r.success ? `[成功] -> ${sName}` : `[失败] -> ${sName}: ${r.error}`, r.success?'success':'error');
@@ -528,13 +533,10 @@ def distribute():
     
     if not all_servers: return jsonify({'results': [], 'error': 'No nodes linked'})
 
-    # 1. 解析选中的节点
     try:
         target_indices = json.loads(request.form.get('targets', '[]'))
-        # 过滤出需要分发的服务器
         target_servers = [all_servers[i] for i in target_indices if 0 <= i < len(all_servers)]
-    except:
-        return jsonify({'results': [], 'error': 'Invalid targets selection'})
+    except: return jsonify({'results': [], 'error': 'Invalid targets'})
 
     if not target_servers: return jsonify({'results': [], 'error': 'No targets selected'})
 
@@ -557,7 +559,9 @@ def distribute():
         'is_paused': request.form.get('paused') == 'true',
         'content_layout': layout_val,
         'is_root_folder': (layout_val == 'Original'),
-        'up_limit': up_limit, 'dl_limit': dl_limit,
+        # 修复：使用全称参数名，确保库能正确解析
+        'upload_limit': up_limit, 
+        'download_limit': dl_limit,
     }
     options = {k: v for k, v in options.items() if v is not None}
 
@@ -580,7 +584,11 @@ def distribute():
     for t in threads: t.start()
     for t in threads: t.join()
 
-    return jsonify({'results': results})
+    # 返回调试信息给前端
+    return jsonify({
+        'results': results, 
+        'debug_limits': {'up': up_limit, 'dl': dl_limit}
+    })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

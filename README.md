@@ -43,6 +43,7 @@ services:
     environment:
       - DATA_DIR=/data
       - TZ=Asia/Shanghai
+      - WEB_PASSWORD=这里填写您的强密码
 ```
 
 启动服务：

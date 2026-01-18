@@ -4,8 +4,6 @@
 
 Qbit-Nexus 是一个专为 PT 玩家和多服务器用户设计的现代化分发中枢。它允许您通过单一的 Web 界面，将种子文件或磁力链接同时推送到多个 qBittorrent 实例中，支持所有原生高级参数配置。
 
-![UI Preview](https://via.placeholder.com/1200x600.png?text=Qbit-Nexus+Dashboard+Preview)
-*(建议替换为您自己的项目截图)*
 
 ## ✨ 核心特性 (Features)
 

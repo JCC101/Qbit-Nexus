@@ -12,13 +12,16 @@ if not os.path.exists(DATA_DIR):
 CONFIG_FILE = os.path.join(DATA_DIR, 'nexus_config.json')
 
 app = Flask(__name__)
+# 设置 Session 密钥 (用于加密 Cookie，每次重启随机生成即可，保证安全性)
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
+# 获取环境变量中的密码
 WEB_PASSWORD = os.getenv('WEB_PASSWORD')
 
 # --- 登录验证装饰器 ---
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # 如果设置了密码且用户未登录，跳转到登录页
         if WEB_PASSWORD and not session.get('logged_in'):
             return redirect(url_for('login'))
         return f(*args, **kwargs)
@@ -46,6 +49,7 @@ LOGIN_TEMPLATE = """
             <h1 class="text-2xl font-bold text-slate-800">安全验证</h1>
             <p class="text-slate-400 text-sm mt-2">Qbit-Nexus Control Center</p>
         </div>
+        
         <form method="POST" class="space-y-6">
             <div>
                 <label class="block text-xs font-bold text-slate-400 uppercase mb-2 tracking-wider">Access Password</label>
@@ -53,11 +57,13 @@ LOGIN_TEMPLATE = """
                     class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-700 outline-none focus:border-[#0ea5e9] focus:ring-4 focus:ring-blue-500/10 transition-all placeholder-slate-300"
                     placeholder="请输入访问密码...">
             </div>
+            
             {% if error %}
             <div class="text-red-500 text-xs font-medium text-center bg-red-50 py-2.5 rounded-lg border border-red-100 flex items-center justify-center gap-2">
                 <i class="fas fa-exclamation-circle"></i> {{ error }}
             </div>
             {% endif %}
+
             <button type="submit" 
                 class="w-full bg-gradient-to-r from-[#0ea5e9] to-[#3b82f6] text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200">
                 解锁控制台
@@ -68,7 +74,7 @@ LOGIN_TEMPLATE = """
 </html>
 """
 
-# --- 主界面模板 (v4.1 - 紧凑型布局 & 按钮优化) ---
+# --- 主界面模板 (v4.2 - 2K/1080p 完美适配版) ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -89,7 +95,10 @@ HTML_TEMPLATE = """
                         text: '#334155', muted: '#94a3b8'
                     },
                     fontFamily: { sans: ['Inter', 'sans-serif'] },
-                    screens: { '2xl': '1600px', '3xl': '2000px' }
+                    screens: { 
+                        '2xl': '1600px', // 针对大屏笔记本/1080p宽屏
+                        '3xl': '2100px'  // 针对 2K/4K 显示器 (关键断点)
+                    }
                 }
             }
         }
@@ -106,12 +115,23 @@ HTML_TEMPLATE = """
         }
         .fresh-input:focus { background-color: #ffffff; border-color: #0ea5e9; outline: none; box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.1); }
         
-        .txt-responsive { font-size: 0.8rem; } @media (min-width: 1600px) { .txt-responsive { font-size: 0.9rem; } }
-        .lbl-responsive { font-size: 0.7rem; font-weight: 600; color: #64748b; margin-bottom: 0.15rem; } @media (min-width: 1600px) { .lbl-responsive { font-size: 0.8rem; margin-bottom: 0.25rem; } }
+        /* 响应式字体与尺寸控制 */
+        .txt-responsive { font-size: 0.8rem; } 
+        @media (min-width: 1600px) { .txt-responsive { font-size: 0.875rem; } }
+        @media (min-width: 2100px) { .txt-responsive { font-size: 1rem; } } /* 2K字体变大 */
+
+        .lbl-responsive { font-size: 0.7rem; font-weight: 600; color: #64748b; margin-bottom: 0.15rem; } 
+        @media (min-width: 1600px) { .lbl-responsive { font-size: 0.75rem; margin-bottom: 0.25rem; } }
+        @media (min-width: 2100px) { .lbl-responsive { font-size: 0.875rem; margin-bottom: 0.4rem; } }
+
         .section-title { font-size: 0.8rem; font-weight: 700; color: #0ea5e9; text-transform: uppercase; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; } 
-        
+        @media (min-width: 2100px) { .section-title { font-size: 1rem; margin-bottom: 1.25rem; } }
+
         .check-item { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; user-select: none; color: #475569; font-size: 0.8rem;}
+        @media (min-width: 2100px) { .check-item { font-size: 0.95rem; gap: 0.6rem; } }
+        
         .check-item input { accent-color: #0ea5e9; width: 0.9rem; height: 0.9rem; border-radius: 3px; } 
+        @media (min-width: 2100px) { .check-item input { width: 1.1rem; height: 1.1rem; } }
 
         .fresh-btn { background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%); color: white; border-radius: 9999px; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2); }
         .fresh-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 10px -1px rgba(59, 130, 246, 0.3); }
@@ -119,7 +139,6 @@ HTML_TEMPLATE = """
         .status-dot { height: 6px; width: 6px; border-radius: 50%; display: inline-block; }
         .status-online { background-color: #10b981; } .status-offline { background-color: #ef4444; } .status-pending { background-color: #cbd5e1; }
         
-        /* 紧凑型滚动条 */
         ::-webkit-scrollbar { width: 4px; height: 4px; } 
         ::-webkit-scrollbar-track { background: transparent; } 
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
@@ -127,18 +146,18 @@ HTML_TEMPLATE = """
 </head>
 <body class="h-screen flex flex-col md:flex-row overflow-hidden bg-bg text-text">
 
-<aside class="w-full md:w-56 2xl:w-72 bg-surface border-b md:border-r border-border flex flex-col z-20 shadow-sm shrink-0 transition-all">
-    <div class="h-14 2xl:h-16 flex items-center justify-between px-4 border-b border-border">
+<aside class="w-full md:w-56 3xl:w-80 bg-surface border-b md:border-r border-border flex flex-col z-20 shadow-sm shrink-0 transition-all">
+    <div class="h-14 3xl:h-20 flex items-center justify-between px-4 border-b border-border">
         <div class="flex items-center gap-2">
-            <div class="w-7 h-7 rounded bg-primary flex items-center justify-center text-white"><i class="fas fa-layer-group text-sm"></i></div>
-            <h1 class="font-bold text-base 2xl:text-lg text-slate-800">Qbit-Nexus</h1>
+            <div class="w-7 h-7 3xl:w-9 3xl:h-9 rounded bg-primary flex items-center justify-center text-white"><i class="fas fa-layer-group text-sm 3xl:text-lg"></i></div>
+            <h1 class="font-bold text-base 3xl:text-xl text-slate-800">Qbit-Nexus</h1>
         </div>
         <button class="md:hidden text-slate-500" onclick="document.getElementById('mobileMenu').classList.toggle('hidden')"><i class="fas fa-bars"></i></button>
     </div>
     <div id="mobileMenu" class="hidden md:flex flex-1 flex-col overflow-hidden">
         <div class="flex-1 overflow-y-auto p-3 space-y-2" id="serverList"></div>
         <div class="p-3 border-t border-border bg-slate-50">
-            <button onclick="toggleModal('addNodeModal')" class="w-full py-2 rounded border border-dashed border-slate-300 text-slate-500 text-xs 2xl:text-sm hover:border-primary hover:text-primary transition-all">
+            <button onclick="toggleModal('addNodeModal')" class="w-full py-2 3xl:py-3 rounded border border-dashed border-slate-300 text-slate-500 text-xs 3xl:text-sm hover:border-primary hover:text-primary transition-all">
                 <i class="fas fa-plus mr-1"></i> 添加下载器
             </button>
         </div>
@@ -146,94 +165,96 @@ HTML_TEMPLATE = """
 </aside>
 
 <main class="flex-1 flex flex-col min-w-0 bg-bg overflow-hidden relative">
-    <header class="h-14 2xl:h-16 flex justify-between items-center px-6 border-b border-border bg-surface/60 backdrop-blur shrink-0">
-        <h2 class="font-bold text-slate-700 text-sm 2xl:text-base">批量任务添加 (Batch Add)</h2>
+    <header class="h-14 3xl:h-20 flex justify-between items-center px-6 border-b border-border bg-surface/60 backdrop-blur shrink-0">
+        <h2 class="font-bold text-slate-700 text-sm 3xl:text-lg">批量任务添加 (Batch Add)</h2>
         <div class="flex items-center gap-2">
-            <button onclick="openSettings()" class="text-xs font-medium text-slate-500 hover:text-primary flex items-center gap-1.5 bg-white border border-slate-200 px-3 py-1.5 rounded-full shadow-sm transition-all">
+            <button onclick="openSettings()" class="text-xs 3xl:text-sm font-medium text-slate-500 hover:text-primary flex items-center gap-1.5 bg-white border border-slate-200 px-3 py-1.5 3xl:px-4 3xl:py-2 rounded-full shadow-sm transition-all">
                 <i class="fas fa-cog"></i> 全局配置
             </button>
-            <a href="/logout" class="text-xs font-medium text-red-400 hover:text-red-600 hover:bg-red-50 flex items-center gap-1.5 bg-white border border-red-100 px-3 py-1.5 rounded-full shadow-sm transition-all" title="退出">
+            <a href="/logout" class="text-xs 3xl:text-sm font-medium text-red-400 hover:text-red-600 hover:bg-red-50 flex items-center gap-1.5 bg-white border border-red-100 px-3 py-1.5 3xl:px-4 3xl:py-2 rounded-full shadow-sm transition-all" title="退出">
                 <i class="fas fa-sign-out-alt"></i>
             </a>
         </div>
     </header>
 
-    <div class="flex-1 overflow-y-auto p-4 2xl:p-8">
-        <div class="w-full max-w-[1920px] mx-auto space-y-4">
+    <div class="flex-1 overflow-y-auto p-4 3xl:p-8">
+        <div class="w-full max-w-[2400px] mx-auto space-y-4 3xl:space-y-6">
             
-            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 h-auto xl:h-[220px]">
-                <div class="fresh-card p-4 space-y-2">
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 3xl:gap-6 h-auto xl:h-[240px] 3xl:h-[360px]">
+                
+                <div class="fresh-card p-4 3xl:p-6 space-y-2 3xl:space-y-4">
                     <div class="section-title text-xs"><i class="fas fa-file-import"></i> 资源选择</div>
-                    <div class="flex flex-col justify-center h-full gap-3">
-                        <div class="relative group flex-1 max-h-20">
+                    <div class="flex flex-col justify-center h-full gap-3 3xl:gap-5">
+                        <div class="relative group flex-1 max-h-24 3xl:max-h-40">
                             <input type="file" id="torrentFile" accept=".torrent" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onchange="updateFileName(this)">
-                            <div id="fileDropZone" class="h-full border border-dashed border-slate-300 rounded flex flex-col items-center justify-center gap-1 group-hover:border-primary group-hover:bg-blue-50 transition-all bg-slate-50/50">
-                                <i class="fas fa-cloud-upload-alt text-lg text-slate-400 group-hover:text-primary"></i>
-                                <span id="fileNameDisplay" class="text-xs font-medium text-slate-500">点击上传 .torrent 文件</span>
+                            <div id="fileDropZone" class="h-full border border-dashed border-slate-300 rounded flex flex-col items-center justify-center gap-1 3xl:gap-3 group-hover:border-primary group-hover:bg-blue-50 transition-all bg-slate-50/50">
+                                <i class="fas fa-cloud-upload-alt text-lg 3xl:text-3xl text-slate-400 group-hover:text-primary"></i>
+                                <span id="fileNameDisplay" class="text-xs 3xl:text-base font-medium text-slate-500">点击上传 .torrent 文件</span>
                             </div>
                         </div>
                         <div class="relative">
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-xs"><i class="fas fa-magnet"></i></div>
-                            <input type="text" id="magnetLink" placeholder="或者粘贴 Magnet 链接..." class="pl-8 w-full fresh-input py-1.5 text-xs">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-xs 3xl:text-base"><i class="fas fa-magnet"></i></div>
+                            <input type="text" id="magnetLink" placeholder="或者粘贴 Magnet 链接..." class="pl-8 3xl:pl-10 w-full fresh-input py-1.5 3xl:py-3 text-xs 3xl:text-sm">
                         </div>
                     </div>
                 </div>
-                <div class="fresh-card p-4 flex flex-col">
+
+                <div class="fresh-card p-4 3xl:p-6 flex flex-col">
                     <div class="section-title text-xs flex justify-between">
                         <span><i class="fas fa-server"></i> 目标节点</span>
-                        <div class="space-x-1.5 text-[10px]">
+                        <div class="space-x-1.5 text-[10px] 3xl:text-xs">
                             <button onclick="toggleAllTargets(true)" class="text-primary hover:underline">全选</button>
                             <span class="text-slate-300">|</span>
                             <button onclick="toggleAllTargets(false)" class="text-slate-400 hover:text-slate-600 hover:underline">全不选</button>
                         </div>
                     </div>
-                    <div id="targetSelectionArea" class="flex-1 overflow-y-auto pr-1 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-2 content-start">
+                    <div id="targetSelectionArea" class="flex-1 overflow-y-auto pr-1 grid grid-cols-2 md:grid-cols-3 3xl:grid-cols-4 gap-2 3xl:gap-4 content-start">
                         <div class="text-xs text-slate-400 col-span-full text-center py-4">正在加载节点...</div>
                     </div>
                 </div>
             </div>
 
-            <div class="fresh-card p-5">
-                <div class="section-title text-xs mb-3"><i class="fas fa-sliders-h"></i> 任务参数</div>
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div class="fresh-card p-5 3xl:p-8">
+                <div class="section-title text-xs mb-3 3xl:mb-6"><i class="fas fa-sliders-h"></i> 任务参数</div>
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 3xl:gap-10">
                     
-                    <div class="lg:col-span-5 space-y-3 border-b lg:border-b-0 lg:border-r border-slate-100 pb-4 lg:pb-0 lg:pr-6">
-                        <div class="grid grid-cols-2 gap-3">
-                            <div><label class="lbl-responsive">管理模式 (TMM)</label><select id="autoTMM" class="fresh-input px-2 py-1.5 txt-responsive"><option value="false">手动 (Manual)</option><option value="true">自动 (Automatic)</option></select></div>
-                            <div><label class="lbl-responsive">内容布局</label><select id="contentLayout" class="fresh-input px-2 py-1.5 txt-responsive"><option value="Original">原始</option><option value="Subfolder">创建子目录</option><option value="NoSubFolder">不创建子目录</option></select></div>
+                    <div class="lg:col-span-5 space-y-3 3xl:space-y-5 border-b lg:border-b-0 lg:border-r border-slate-100 pb-4 lg:pb-0 lg:pr-6 3xl:pr-10">
+                        <div class="grid grid-cols-2 gap-3 3xl:gap-5">
+                            <div><label class="lbl-responsive">管理模式 (TMM)</label><select id="autoTMM" class="fresh-input px-2 py-1.5 3xl:py-2.5 txt-responsive"><option value="false">手动 (Manual)</option><option value="true">自动 (Automatic)</option></select></div>
+                            <div><label class="lbl-responsive">内容布局</label><select id="contentLayout" class="fresh-input px-2 py-1.5 3xl:py-2.5 txt-responsive"><option value="Original">原始</option><option value="Subfolder">创建子目录</option><option value="NoSubFolder">不创建子目录</option></select></div>
                         </div>
-                        <div><label class="lbl-responsive">保存路径</label><input type="text" id="savePath" class="fresh-input px-2 py-1.5 txt-responsive" placeholder="默认路径..."></div>
-                        <div><label class="lbl-responsive">重命名 (可选)</label><input type="text" id="rename" class="fresh-input px-2 py-1.5 txt-responsive" placeholder="保持原名则留空"></div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div><label class="lbl-responsive">分类</label><input type="text" id="category" class="fresh-input px-2 py-1.5 txt-responsive"></div>
-                            <div><label class="lbl-responsive">标签</label><input type="text" id="tags" class="fresh-input px-2 py-1.5 txt-responsive"></div>
+                        <div><label class="lbl-responsive">保存路径</label><input type="text" id="savePath" class="fresh-input px-2 py-1.5 3xl:py-2.5 txt-responsive" placeholder="默认路径..."></div>
+                        <div><label class="lbl-responsive">重命名 (可选)</label><input type="text" id="rename" class="fresh-input px-2 py-1.5 3xl:py-2.5 txt-responsive" placeholder="保持原名则留空"></div>
+                        <div class="grid grid-cols-2 gap-3 3xl:gap-5">
+                            <div><label class="lbl-responsive">分类</label><input type="text" id="category" class="fresh-input px-2 py-1.5 3xl:py-2.5 txt-responsive"></div>
+                            <div><label class="lbl-responsive">标签</label><input type="text" id="tags" class="fresh-input px-2 py-1.5 3xl:py-2.5 txt-responsive"></div>
                         </div>
                     </div>
 
-                    <div class="lg:col-span-4 space-y-3 border-b lg:border-b-0 lg:border-r border-slate-100 pb-4 lg:pb-0 lg:px-6">
-                        <div class="space-y-2 bg-slate-50 p-3 rounded border border-slate-100">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase">速度限制 (预设)</label>
+                    <div class="lg:col-span-4 space-y-3 3xl:space-y-5 border-b lg:border-b-0 lg:border-r border-slate-100 pb-4 lg:pb-0 lg:px-6 3xl:px-10">
+                        <div class="space-y-2 3xl:space-y-4 bg-slate-50 p-3 3xl:p-5 rounded border border-slate-100">
+                            <label class="text-[10px] 3xl:text-xs font-bold text-slate-400 uppercase">速度限制 (预设)</label>
                             <label class="flex items-center justify-between cursor-pointer group p-1 hover:bg-white rounded transition-colors">
                                 <div class="flex items-center gap-2"><div class="w-6 h-6 rounded bg-green-100 text-green-600 flex items-center justify-center text-xs"><i class="fas fa-upload"></i></div><span class="txt-responsive font-medium text-slate-700">上传限速</span></div>
-                                <div class="flex items-center gap-2"><span id="limitUlDisplay" class="text-[10px] text-slate-400">--</span><input type="checkbox" id="useLimitUl" class="accent-primary w-4 h-4 rounded"></div>
+                                <div class="flex items-center gap-2"><span id="limitUlDisplay" class="text-[10px] 3xl:text-xs text-slate-400">--</span><input type="checkbox" id="useLimitUl" class="accent-primary w-4 h-4 3xl:w-5 3xl:h-5 rounded"></div>
                             </label>
                             <label class="flex items-center justify-between cursor-pointer group p-1 hover:bg-white rounded transition-colors">
                                 <div class="flex items-center gap-2"><div class="w-6 h-6 rounded bg-blue-100 text-blue-600 flex items-center justify-center text-xs"><i class="fas fa-download"></i></div><span class="txt-responsive font-medium text-slate-700">下载限速</span></div>
-                                <div class="flex items-center gap-2"><span id="limitDlDisplay" class="text-[10px] text-slate-400">--</span><input type="checkbox" id="useLimitDl" class="accent-primary w-4 h-4 rounded"></div>
+                                <div class="flex items-center gap-2"><span id="limitDlDisplay" class="text-[10px] 3xl:text-xs text-slate-400">--</span><input type="checkbox" id="useLimitDl" class="accent-primary w-4 h-4 3xl:w-5 3xl:h-5 rounded"></div>
                             </label>
                         </div>
-                        <div class="space-y-2 pt-1">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase">停止条件 (留空为无)</label>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div><label class="lbl-responsive">最大分享率</label><input type="number" id="ratioLimit" class="fresh-input px-2 py-1.5 txt-responsive" placeholder="∞"></div>
-                                <div><label class="lbl-responsive">做种时间(分)</label><input type="number" id="seedingTimeLimit" class="fresh-input px-2 py-1.5 txt-responsive" placeholder="∞"></div>
+                        <div class="space-y-2 3xl:space-y-4 pt-1">
+                            <label class="text-[10px] 3xl:text-xs font-bold text-slate-400 uppercase">停止条件 (留空为无)</label>
+                            <div class="grid grid-cols-2 gap-3 3xl:gap-5">
+                                <div><label class="lbl-responsive">最大分享率</label><input type="number" id="ratioLimit" class="fresh-input px-2 py-1.5 3xl:py-2.5 txt-responsive" placeholder="∞"></div>
+                                <div><label class="lbl-responsive">做种时间(分)</label><input type="number" id="seedingTimeLimit" class="fresh-input px-2 py-1.5 3xl:py-2.5 txt-responsive" placeholder="∞"></div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="lg:col-span-3 space-y-3 lg:pl-4 pt-1">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">高级选项</label>
-                        <div class="flex flex-col gap-2.5">
+                    <div class="lg:col-span-3 space-y-3 3xl:space-y-5 lg:pl-4 3xl:pl-8 pt-1">
+                        <label class="text-[10px] 3xl:text-xs font-bold text-slate-400 uppercase mb-2 block">高级选项</label>
+                        <div class="flex flex-col gap-2.5 3xl:gap-4">
                             <label class="check-item"><input type="checkbox" id="startTorrent" checked> <span>开始 Torrent</span></label>
                             <label class="check-item"><input type="checkbox" id="addToTop"> <span>添加到队列顶部</span></label>
                             <label class="check-item"><input type="checkbox" id="skipHash"> <span>跳过哈希校验</span></label>
@@ -243,19 +264,19 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
 
-                <div class="mt-6 pt-4 border-t border-slate-100 flex justify-center">
-                    <button onclick="distributeTorrent()" class="fresh-btn w-full md:w-auto md:px-12 py-3 font-bold text-sm tracking-wide flex justify-center items-center gap-2 shadow-lg shadow-blue-500/20 hover:scale-105 transform transition-transform">
+                <div class="mt-6 pt-4 3xl:mt-10 3xl:pt-6 border-t border-slate-100 flex justify-center">
+                    <button onclick="distributeTorrent()" class="fresh-btn w-full md:w-auto md:px-12 py-3 3xl:py-3.5 font-bold text-sm 3xl:text-base tracking-wide flex justify-center items-center gap-2 shadow-lg shadow-blue-500/20 hover:scale-105 transform transition-transform">
                         <i class="fas fa-paper-plane"></i> 立即批量添加
                     </button>
                 </div>
             </div>
 
-            <div class="bg-white border border-slate-200 rounded-lg p-2 flex flex-col h-24 2xl:h-32 shadow-sm">
+            <div class="bg-white border border-slate-200 rounded-lg p-2 flex flex-col h-24 3xl:h-32 shadow-sm">
                 <div class="px-2 pb-1 flex justify-between items-center border-b border-slate-50">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">System Log</span>
-                    <button onclick="document.getElementById('consoleLog').innerHTML=''" class="text-[10px] text-slate-400 hover:text-primary">Clear</button>
+                    <span class="text-[10px] 3xl:text-xs font-bold text-slate-400 uppercase tracking-widest">System Log</span>
+                    <button onclick="document.getElementById('consoleLog').innerHTML=''" class="text-[10px] 3xl:text-xs text-slate-400 hover:text-primary">Clear</button>
                 </div>
-                <div id="consoleLog" class="flex-1 overflow-y-auto p-2 font-mono text-[10px] space-y-1 text-slate-600">
+                <div id="consoleLog" class="flex-1 overflow-y-auto p-2 font-mono text-[10px] 3xl:text-xs space-y-1 text-slate-600">
                     <div class="text-primary"><i class="fas fa-check-circle mr-1"></i>System initialized.</div>
                 </div>
             </div>
@@ -285,8 +306,8 @@ HTML_TEMPLATE = """
         <div class="bg-blue-50/50 p-3 rounded border border-blue-100">
             <label class="text-[10px] font-bold text-primary uppercase mb-2 block">限速预设值 (Presets)</label>
             <div class="grid grid-cols-2 gap-3">
-                <div><label class="lbl-responsive">上传 (KiB/s)</label><input type="number" id="def_presetUl" class="fresh-input px-2 py-1.5 bg-white" placeholder="20480"></div>
-                <div><label class="lbl-responsive">下载 (KiB/s)</label><input type="number" id="def_presetDl" class="fresh-input px-2 py-1.5 bg-white" placeholder="51200"></div>
+                <div><label class="lbl-responsive">上传 (KiB/s)</label><input type="number" id="def_presetUl" class="fresh-input px-2 py-1.5 bg-white" placeholder="例如 20480"></div>
+                <div><label class="lbl-responsive">下载 (KiB/s)</label><input type="number" id="def_presetDl" class="fresh-input px-2 py-1.5 bg-white" placeholder="例如 51200"></div>
             </div>
         </div>
         <div class="space-y-3">
@@ -317,23 +338,25 @@ HTML_TEMPLATE = """
         document.getElementById('def_tags').value = d.tags || '';
         toggleModal('settingsModal');
     }
+    // IP 脱敏显示
     function maskUrl(urlStr) { try { return urlStr.replace(/(\d{1,3}\.)\d{1,3}\.\d{1,3}(\.\d{1,3})/, '$1***.***$2'); } catch(e) { return '******'; } }
+    
     function log(msg, type='info') {
         const box = document.getElementById('consoleLog');
         const time = new Date().toLocaleTimeString('en-US', {hour12: false});
         let color = 'text-slate-600'; let icon = '<i class="fas fa-info-circle text-xs mr-1 opacity-50"></i>';
         if(type === 'success') { color = 'text-emerald-600'; icon = '<i class="fas fa-check text-xs mr-1"></i>'; }
         if(type === 'error') { color = 'text-red-500'; icon = '<i class="fas fa-times text-xs mr-1"></i>'; }
-        box.innerHTML += `<div class="${color} flex items-center"><span class="opacity-40 text-[10px] mr-2 font-mono">${time}</span>${icon}<span>${msg}</span></div>`;
+        box.innerHTML += `<div class="${color} flex items-center"><span class="opacity-40 text-[10px] 3xl:text-xs mr-2 font-mono">${time}</span>${icon}<span>${msg}</span></div>`;
         box.scrollTop = box.scrollHeight;
     }
     function updateFileName(input) {
         const display = document.getElementById('fileNameDisplay');
         const zone = document.getElementById('fileDropZone');
         if (input.files && input.files[0]) {
-            display.innerText = input.files[0].name; display.className = "text-xs font-bold text-primary"; zone.classList.add('border-primary', 'bg-blue-50');
+            display.innerText = input.files[0].name; display.className = "text-xs 3xl:text-sm font-bold text-primary"; zone.classList.add('border-primary', 'bg-blue-50');
         } else {
-            display.innerText = '点击上传 .torrent 文件'; display.className = "text-xs font-medium text-slate-500"; zone.classList.remove('border-primary', 'bg-blue-50');
+            display.innerText = '点击上传 .torrent 文件'; display.className = "text-xs 3xl:text-sm font-medium text-slate-500"; zone.classList.remove('border-primary', 'bg-blue-50');
         }
     }
     async function loadData() {
@@ -355,11 +378,11 @@ HTML_TEMPLATE = """
             const displayName = s.name || s.host; const safeHost = maskUrl(s.host); 
             const div = document.createElement('div');
             div.className = 'bg-white border border-slate-100 p-2 rounded hover:border-primary/50 transition-all mb-1.5 flex justify-between items-center group cursor-default';
-            div.innerHTML = `<div class="overflow-hidden pr-2"><div class="font-bold text-xs text-slate-700 truncate">${displayName}</div><div class="text-[10px] text-slate-400 truncate font-mono">${safeHost}</div></div><div class="flex gap-1.5 items-center"><div id="status-${idx}" class="status-dot status-pending" title="Checking..."></div><button onclick="removeServer(${idx})" class="text-slate-300 hover:text-red-500 transition-colors px-1"><i class="fas fa-trash text-[10px]"></i></button></div>`;
+            div.innerHTML = `<div class="overflow-hidden pr-2"><div class="font-bold text-xs 3xl:text-sm text-slate-700 truncate">${displayName}</div><div class="text-[10px] 3xl:text-xs text-slate-400 truncate font-mono">${safeHost}</div></div><div class="flex gap-1.5 items-center"><div id="status-${idx}" class="status-dot status-pending" title="Checking..."></div><button onclick="removeServer(${idx})" class="text-slate-300 hover:text-red-500 transition-colors px-1"><i class="fas fa-trash text-[10px]"></i></button></div>`;
             container.appendChild(div);
             const label = document.createElement('label');
-            label.className = "flex items-center gap-2 p-2 border border-slate-100 rounded hover:bg-blue-50 cursor-pointer bg-white transition-all hover:shadow-sm";
-            label.innerHTML = `<input type="checkbox" name="targetNode" value="${idx}" class="accent-primary w-3.5 h-3.5"><div class="overflow-hidden"><div class="text-xs font-bold text-slate-600 truncate">${displayName}</div><div class="text-[10px] text-slate-400 truncate font-mono">${safeHost}</div></div>`;
+            label.className = "flex items-center gap-2 p-2 3xl:p-3 border border-slate-100 rounded-lg hover:bg-blue-50 cursor-pointer bg-white transition-all hover:shadow-sm";
+            label.innerHTML = `<input type="checkbox" name="targetNode" value="${idx}" class="accent-primary w-3.5 h-3.5 3xl:w-4 3xl:h-4"><div class="overflow-hidden"><div class="text-xs 3xl:text-sm font-bold text-slate-600 truncate">${displayName}</div><div class="text-[10px] 3xl:text-xs text-slate-400 truncate font-mono">${safeHost}</div></div>`;
             targetContainer.appendChild(label);
             setTimeout(() => testServer(idx, true), idx * 200 + 300);
         });
@@ -439,7 +462,8 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# --- 后端逻辑保持不变 ---
+# --- 后端逻辑 ---
+
 def load_data_file():
     if not os.path.exists(CONFIG_FILE): return {"servers": [], "defaults": {}}
     try:
@@ -461,17 +485,23 @@ def get_client(server_conf):
         REQUESTS_ARGS={'timeout': 15}
     )
 
+# --- 路由 ---
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if not WEB_PASSWORD: 
+    # 如果没设置 WEB_PASSWORD，直接跳过登录
+    if not WEB_PASSWORD:
         session['logged_in'] = True
         return redirect(url_for('index'))
+    
     if request.method == 'POST':
         if request.form.get('password') == WEB_PASSWORD:
             session['logged_in'] = True
+            # 登录成功后跳转到之前请求的页面，或者主页
             return redirect(request.args.get('next') or url_for('index'))
         else:
             return render_template_string(LOGIN_TEMPLATE, error="密码错误")
+    
     return render_template_string(LOGIN_TEMPLATE)
 
 @app.route('/logout')
@@ -545,19 +575,26 @@ def distribute():
     if not target_servers: return jsonify({'results': [], 'error': 'No targets selected'})
     magnet = request.form.get('magnet')
     torrent_file = request.files.get('file')
+    
     def get_float(key):
         val = request.form.get(key)
         return float(val) if val and val.replace('.','',1).isdigit() else None
     def get_int(key): 
         val = request.form.get(key)
         return int(val) if val and val.isdigit() else None
+    
+    # 核心：从预设读取限速配置 (Bytes)
     def get_preset_bytes(key):
         val = defaults.get(key)
         if val and str(val).isdigit(): return int(val) * 1024
         return None
+
+    # 如果勾选了“启用限速”，则读取预设值；否则为 None (无限制)
     up_limit = get_preset_bytes('presetUl') if request.form.get('use_limit_ul') == 'true' else None
     dl_limit = get_preset_bytes('presetDl') if request.form.get('use_limit_dl') == 'true' else None
+    
     layout_val = request.form.get('content_layout', 'Original')
+
     options = {
         'save_path': request.form.get('save_path') or None,
         'rename': request.form.get('rename') or None,
@@ -576,9 +613,11 @@ def distribute():
         'is_first_last_piece_priority': request.form.get('first_last') == 'true',
         'add_to_top_of_queue': request.form.get('add_to_top') == 'true'
     }
+    
     options = {k: v for k, v in options.items() if v is not None}
     file_data = torrent_file.read() if torrent_file else None
     results = []
+
     def task(srv):
         res = {'server': srv['host'], 'name': srv.get('name', ''), 'success': False}
         try:
@@ -590,9 +629,11 @@ def distribute():
             res['success'] = True
         except Exception as e: res['error'] = str(e)
         results.append(res)
+
     threads = [threading.Thread(target=task, args=(s,)) for s in target_servers]
     for t in threads: t.start()
     for t in threads: t.join()
+
     return jsonify({'results': results, 'debug_limits': {'up': up_limit, 'dl': dl_limit}})
 
 if __name__ == '__main__':
